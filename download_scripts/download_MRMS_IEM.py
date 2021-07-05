@@ -62,7 +62,7 @@ date_range = pd.date_range(start=this_date, end=this_date+pd.DateOffset(1),freq=
 date_range = date_range[:-1]
 
 #loop over all 24 hours 
-for date in tqdm(date_range[0:3]):
+for date in tqdm(date_range[0:1]):
      #download zip file 
      killflag = grab_file(date)
      if killflag:
@@ -82,5 +82,4 @@ for date in tqdm(date_range[0:3]):
 #remove all empty hourly # dirs
 old_dirs = glob.glob(save_path+date.strftime('%Y%m%d') + '/2021*')
 for this_dir in old_dirs:
-     os.rmdir(this_dir+'/CONUS/')
-     os.rmdir(this_dir)
+     shutil.rmtree(this_dir,ignore_errors=True)

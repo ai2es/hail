@@ -6,6 +6,7 @@ import os
 import glob
 import sys
 
+#time the input data generation
 tic = time.perf_counter()
 #find all the days that we have data for
 all_hrrr_dirs = glob.glob('/ourdisk/hpc/ai2es/hail/hrrr/hrrr/*/')

@@ -3,9 +3,9 @@ from tqdm import tqdm
 import numpy as np
 import xarray as xr
 import os
+import argparse
 
 
-# TODO: Plot this output before continueing
 class BalancedPatcher(Patcher):
     # NOTE: Currently only supports classification. Further inheritance required?
     def run(self):
@@ -14,6 +14,7 @@ class BalancedPatcher(Patcher):
         label_patches_root = self.config["Output"]["labels_root"]
         n_patches = self.config["Patches"]["number_of_patches"]
         all_labels = self.config["Patches"]["all_labels"]
+        chosen_label = self.config["Patches"]["chosen_label"]
 
         feature_files = self._glob_files()
         feature_files.sort()
@@ -22,6 +23,9 @@ class BalancedPatcher(Patcher):
         feature_files = self._select_data_range(feature_files)
 
         n_patch_label_sets = int(n_patches/len(all_labels))
+
+        feature_patches = None
+        label_patches = None
 
         for n in tqdm(np.arange(0,n_patch_label_sets)):
             for label in all_labels:
@@ -35,8 +39,7 @@ class BalancedPatcher(Patcher):
                     shuffled_label_file = shuffled_label_files[i]
                     label_file_ds = xr.open_dataset(shuffled_label_file)
 
-                    # TODO: SWITCH "mesh" TO CONFIG FILE LABEL NAME SELECTION
-                    labels_np = label_file_ds.mesh.to_numpy()
+                    labels_np = label_file_ds[chosen_label].to_numpy()
 
                     if label in np.unique(labels_np):
                         shuffled_feature_file = shuffled_feature_files[i]
@@ -62,15 +65,31 @@ class BalancedPatcher(Patcher):
                         if feature_patch is None:
                             continue
 
-                        feature_patch_path = os.path.join(feature_patches_root, str(n) + "-" + str(label) + ".nc")
-                        label_patch_path = os.path.join(label_patches_root, str(n) + "-" + str(label) + ".nc")
+                        # TODO: MAJOR: (SHOULD BE METHOD IN PARENT CLASS) Add system for selecting both feature variables and
+                        # label variables from list of strings in config file. Single label currrently called "chosen_label"
+                        # can still be used for class balance purposes but there may be interest in multiple labels down the road
+                        # for regression. (Perhaps then the label choice system should in another child patcher?)
 
-                        feature_patch.to_netcdf(feature_patch_path)
-                        label_patch.to_netcdf(label_patch_path)
+                        feature_patches = self._concat_patches(feature_patches, feature_patch)
+                        label_patches = self._concat_patches(label_patches, label_patch)
 
                         break
 
+        if feature_patches is not None:
+            feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
+            label_patch_path = os.path.join(label_patches_root, str(self.run_num) + ".nc")
+
+            feature_patches.to_netcdf(feature_patch_path)
+            label_patches.to_netcdf(label_patch_path)
+
 
 if __name__ == "__main__":
-    patcher = BalancedPatcher("/Users/tschmidt/Desktop/Hail_Nowcasting/balanced_patcher.cfg")
+     # Parse the command-line arguments
+    parser = argparse.ArgumentParser(description='NetCDF Patch Generator')
+    parser.add_argument('--run_num', type=int, help='Number to label this run')
+    args = parser.parse_args()
+
+
+    # TODO: Switch this to command line argument
+    patcher = BalancedPatcher("/Users/tschmidt/repos/hail/configs/balanced_patcher.cfg", args.run_num)
     patcher.run()

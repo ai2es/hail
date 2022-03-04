@@ -8,6 +8,8 @@ import glob
 from tqdm import tqdm
 import re
 import datetime
+import copy 
+import argparse
 
 
 # NOTE: netcdf4 also need to be manually installed as dependencies
@@ -17,14 +19,15 @@ import datetime
 #       They should be made such that the full date is always a directory somewhere in each file's path.
 #       It should note that it will fail if those .idx files are in the label/feature directories. Only expected files should be in there.
 class Patcher:
-    def __init__(self, config_path):
+    def __init__(self, config_path, run_num):
         # Parse in config file specified by config_path. See examples given in repo
         config = configparser.ConfigParser()
         config.read(config_path)
         self.config = cfg_parser(config)
+        self.run_num = run_num
 
     
-    # TODO: Move this to the DataMiner object
+    # TODO: Move this to the IOHelper script with collection of functions
     def list_possible_level_types(self, list_labels=False):
         # Pull first file in data directory to sample metadata
         all_data_files = self._glob_files(list_labels = list_labels)
@@ -45,7 +48,7 @@ class Patcher:
             raise IOError(os.path.split(one_file)[-1] + " is an unsupported filetype. Only filetypes supported currenly are .nc and .grib/.grib2")
 
 
-    # TODO: Move this to the DataMiner object
+    # TODO: Move this to the IOHelper script with collection of functions
     def list_possible_root_keys(self, list_labels=False):
         # Pull first file in data directory to sample metadata
         all_data_files = self._glob_files(list_labels = list_labels)
@@ -84,6 +87,9 @@ class Patcher:
         # BUT PATCHES WILL STILL BE NEEDED FOR CHECKING IF FEATURE FILES NEED TO BE REMOVED
         feature_files, label_files = self._get_label_files(feature_files)
 
+        feature_patches = None
+        label_patches = None
+
         for n in tqdm(np.arange(0,n_patches)):
             date_index = np.random.randint(0,len(feature_files))
             feature_file = feature_files[date_index]
@@ -107,11 +113,24 @@ class Patcher:
             if feature_patch is None:
                 continue
 
-            feature_patch_path = os.path.join(feature_patches_root, str(n) + ".nc")
-            label_patch_path = os.path.join(label_patches_root, str(n) + ".nc")
+            feature_patches = self._concat_patches(feature_patches, feature_patch)
+            label_patches = self._concat_patches(label_patches, label_patch)
 
-            feature_patch.to_netcdf(feature_patch_path)
-            label_patch.to_netcdf(label_patch_path)
+        if feature_patches is not None:
+            feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
+            label_patch_path = os.path.join(label_patches_root, str(self.run_num) + ".nc")
+
+            feature_patches.to_netcdf(feature_patch_path)
+            label_patches.to_netcdf(label_patch_path)
+
+    
+    def _concat_patches(self, patches, patch):
+        if patches is None:
+            patches = copy.deepcopy(patch.expand_dims(dim='n_samples'))
+        else:
+            patches = xr.concat([patches,patch.expand_dims(dim='n_samples')],dim='n_samples')
+
+        return patches
     
 
     def _make_patch(self, feature_file_ds, label_file_ds, grid_size, patch_size, x, y):
@@ -341,5 +360,12 @@ def value_parser(value):
 
 
 if __name__ == "__main__":
-    patcher = Patcher("/Users/tschmidt/Desktop/Hail_Nowcasting/patcher.cfg")
+         # Parse the command-line arguments
+    parser = argparse.ArgumentParser(description='NetCDF Patch Generator')
+    parser.add_argument('--run_num', type=int, help='Number to label this run')
+    args = parser.parse_args()
+
+
+    # TODO: Switch this to command line argument
+    patcher = Patcher("/Users/tschmidt/repos/hail/configs/patcher.cfg", args.run_num)
     patcher.run()

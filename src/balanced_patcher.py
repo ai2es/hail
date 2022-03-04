@@ -15,6 +15,7 @@ class BalancedPatcher(Patcher):
         n_patches = self.config["Patches"]["number_of_patches"]
         all_labels = self.config["Patches"]["all_labels"]
         chosen_label = self.config["Patches"]["chosen_label"]
+        center_shift = self.config["Patches"]["center_shift"]
 
         feature_files = self._glob_files()
         feature_files.sort()
@@ -51,9 +52,8 @@ class BalancedPatcher(Patcher):
 
                         chosen_location = np.random.randint(0,len(label_location_indeces_row))
 
-                        # TODO: Make sure these values get shifted so it is not always in the center of the patch
-                        x_i = label_location_indeces_row[chosen_location]
-                        y_i = label_location_indeces_col[chosen_location]
+                        x_i = label_location_indeces_row[chosen_location] + np.random.randint(-center_shift,center_shift)
+                        y_i = label_location_indeces_col[chosen_location] + np.random.randint(-center_shift,center_shift)
 
                         x_max = feature_file_ds.dims["x"]
                         y_max = feature_file_ds.dims["y"]

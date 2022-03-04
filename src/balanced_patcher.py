@@ -87,9 +87,10 @@ if __name__ == "__main__":
      # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='NetCDF Patch Generator')
     parser.add_argument('--run_num', type=int, help='Number to label this run')
+    parser.add_argument('--config_path', type=str, help='Path to config file')
     args = parser.parse_args()
 
 
     # TODO: Switch this to command line argument
-    patcher = BalancedPatcher("/Users/tschmidt/repos/hail/configs/balanced_patcher.cfg", args.run_num)
+    patcher = BalancedPatcher(args.config_path, args.run_num)
     patcher.run()

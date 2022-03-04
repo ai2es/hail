@@ -30,7 +30,7 @@ class BalancedPatcher(Patcher):
 
         for n in tqdm(np.arange(0,n_patch_label_sets)):
             for label in all_labels:
-                shuffled_feature_files = np.random.choice(feature_files, size=len(feature_files), replace=False)
+                shuffled_feature_files = np.random.choice(feature_files, size=len(feature_files), replace=False).tolist()
                 shuffled_feature_files, shuffled_label_files = self._get_label_files(shuffled_feature_files)
 
                 # feature_patch = None

@@ -173,6 +173,7 @@ class Patcher:
     # 2. use hard indeces to set range
     # 3. use percentages (real numbers) to set range
     # NOTE: Does not check validity of selections. May add that later
+    # TODO: Test if this works well
     def _select_data_range(self, file_list):
         data_start = self.config["Patches"]["data_start"]
         data_end = self.config["Patches"]["data_end"]
@@ -200,13 +201,13 @@ class Patcher:
             file_dates = np.array([file_date.strftime(date_format_ISO_8601) for file_date in file_dates], dtype="datetime64")
 
             if data_start is not None and data_end is not None:
-                return file_list[np.where(np.logical_and(file_dates >= start_date, file_dates <= end_date))]
+                return file_list[np.where(np.logical_and(file_dates >= start_date, file_dates <= end_date))].tolist()
             elif data_start is None and data_end is not None:
-                return file_list[np.where(file_dates <= end_date)]
+                return file_list[np.where(file_dates <= end_date)].tolist()
             elif data_start is not None and data_end is None:
-                return file_list[np.where(file_dates >= start_date)]
+                return file_list[np.where(file_dates >= start_date)].tolist()
             else:
-                return file_list
+                return file_list.tolist()
         
         else:
             start_index = 0
@@ -224,7 +225,7 @@ class Patcher:
                 elif isinstance(data_end, float):
                     end_index = int(data_end*len(file_list))
         
-            return file_list[start_index:end_index]
+            return file_list[start_index:end_index].tolist()
                 
 
     def _find_label_path(self, feature_file):

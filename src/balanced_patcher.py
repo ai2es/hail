@@ -22,6 +22,20 @@ class BalancedPatcher(Patcher):
 
         # Choose which files to make into patches
         feature_files = self._select_data_range(feature_files)
+        feature_files, label_files = self._get_label_files(feature_files)
+
+        # Find which files have each class present for class balancing purposes
+        # Saved into memory in following loop block to avoid too much disk time
+        classes_in_files = []
+        for label_file in tqdm(label_files):
+            label_file_ds = xr.open_dataset(label_file)
+            label_file_ds.close()
+            labels_np = label_file_ds[chosen_label].to_numpy()
+            classes_in_file = []
+            for label in all_labels:
+                class_bool = label in np.unique(labels_np)
+                classes_in_file.append(class_bool)
+            classes_in_files.append(classes_in_file)
 
         n_patch_label_sets = int(n_patches/len(all_labels))
 
@@ -29,23 +43,21 @@ class BalancedPatcher(Patcher):
         label_patches = None
 
         for n in tqdm(np.arange(0,n_patch_label_sets)):
+            j = 0
             for label in all_labels:
-                shuffled_feature_files = np.random.choice(feature_files, size=len(feature_files), replace=False).tolist()
-                shuffled_feature_files, shuffled_label_files = self._get_label_files(shuffled_feature_files)
+                shuffled_indeces = np.random.choice(np.arange(0,len(feature_files)), size=len(feature_files), replace=False)
 
-                # feature_patch = None
-                # label_patch = None
+                for i in shuffled_indeces:
+                    if classes_in_files[i][j]:
+                        shuffled_feature_file = feature_files[i]
+                        shuffled_label_file = label_files[i]
 
-                for i in np.arange(0,len(shuffled_feature_files)):
-                    shuffled_label_file = shuffled_label_files[i]
-                    label_file_ds = xr.open_dataset(shuffled_label_file)
-
-                    labels_np = label_file_ds[chosen_label].to_numpy()
-
-                    if label in np.unique(labels_np):
-                        shuffled_feature_file = shuffled_feature_files[i]
                         feature_file_ds = xr.open_dataset(shuffled_feature_file)
+                        label_file_ds = xr.open_dataset(shuffled_label_file)
+                        feature_file_ds.close()
+                        label_file_ds.close()
 
+                        labels_np = label_file_ds[chosen_label].to_numpy()
                         label_location_indeces = np.where(labels_np == label)
                         label_location_indeces_row = label_location_indeces[0]
                         label_location_indeces_col = label_location_indeces[1]
@@ -74,6 +86,8 @@ class BalancedPatcher(Patcher):
                         label_patches = self._concat_patches(label_patches, label_patch)
 
                         break
+
+                j = j + 1
 
         if feature_patches is not None:
             feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")

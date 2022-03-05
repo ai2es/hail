@@ -42,6 +42,7 @@ class BalancedPatcher(Patcher):
         feature_patches = None
         label_patches = None
 
+        # TODO: Make this into open_mfdataset for proper parallel
         for n in tqdm(np.arange(0,n_patch_label_sets)):
             j = 0
             for label in all_labels:
@@ -81,6 +82,7 @@ class BalancedPatcher(Patcher):
                         # label variables from list of strings in config file. Single label currrently called "chosen_label"
                         # can still be used for class balance purposes but there may be interest in multiple labels down the road
                         # for regression. (Perhaps then the label choice system should in another child patcher?)
+                        # TODO: Make sure it can also take time as a variable
 
                         feature_patches = self._concat_patches(feature_patches, feature_patch)
                         label_patches = self._concat_patches(label_patches, label_patch)

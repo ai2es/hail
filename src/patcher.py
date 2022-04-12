@@ -86,6 +86,13 @@ class Patcher:
         # BUT PATCHES WILL STILL BE NEEDED FOR CHECKING IF FEATURE FILES NEED TO BE REMOVED
         feature_files, label_files = self._get_label_files(feature_files)
 
+        # TEMP TESTING ####################################
+        for i in range(len(feature_files)):
+            print(feature_files[i])
+            print(label_files[i])
+            print("-------------------")
+        ###################################################
+
         feature_patches = None
         label_patches = None
 

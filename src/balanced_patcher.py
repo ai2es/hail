@@ -6,6 +6,9 @@ import os
 import argparse
 
 
+# TODO: MAJOR: Make system in seperate object for passing in settings via command line arguments that can override
+# any config loaded settings. Much like what is done in our ML assignments
+
 class BalancedPatcher(Patcher):
     # NOTE: Currently only supports classification. Further inheritance required?
     def run(self):
@@ -83,6 +86,8 @@ class BalancedPatcher(Patcher):
                         # can still be used for class balance purposes but there may be interest in multiple labels down the road
                         # for regression. (Perhaps then the label choice system should in another child patcher?)
                         # TODO: Make sure it can also take time as a variable
+
+                        # TODO: Also make system that checks if a patch is already included
 
                         feature_patches = self._concat_patches(feature_patches, feature_patch)
                         label_patches = self._concat_patches(label_patches, label_patch)

@@ -10,10 +10,10 @@ import py3nvml
 
 
 def predict():
-    label_patches_dir = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/REU_run/patches/test_norman_apr_28_casestudy/mrms_labels/*"
-    feature_patches_dir = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/REU_run/patches/test_norman_apr_28_casestudy/hrrr_examples/*"
+    label_patches_dir = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/REU_run/patches/test_random/mrms_labels/*"
+    feature_patches_dir = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/REU_run/patches/test_random/hrrr_examples/*"
     checkpoint_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/REU_run/model_data/run_1"
-    predictions_outfile_name = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/REU_run/patches/predicted_norman_apr_28_casestudy/predictions_norm.nc"
+    predictions_outfile_name = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/REU_run/patches/predicted/predictions.nc"
 
     #output
     label_files = glob.glob(label_patches_dir)
@@ -179,5 +179,5 @@ if __name__ == "__main__":
     tf.config.threading.set_intra_op_parallelism_threads(32)
     tf.config.threading.set_inter_op_parallelism_threads(32)
 
-    train()
-    # predict()
+    # train()
+    predict()

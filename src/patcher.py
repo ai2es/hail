@@ -86,13 +86,6 @@ class Patcher:
         # BUT PATCHES WILL STILL BE NEEDED FOR CHECKING IF FEATURE FILES NEED TO BE REMOVED
         feature_files, label_files = self._get_label_files(feature_files)
 
-        # TEMP TESTING ####################################
-        for i in range(len(feature_files)):
-            print(feature_files[i])
-            print(label_files[i])
-            print("-------------------")
-        ###################################################
-
         feature_patches = None
         label_patches = None
 
@@ -180,7 +173,6 @@ class Patcher:
     # 2. use hard indeces to set range
     # 3. use percentages (real numbers) to set range
     # NOTE: Does not check validity of selections. May add that later
-    # TODO: Test if this works well
     def _select_data_range(self, file_list):
         data_start = self.config["Patches"]["data_start"]
         data_end = self.config["Patches"]["data_end"]

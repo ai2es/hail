@@ -9,6 +9,8 @@ from tensorflow import keras
 import py3nvml
 
 
+# TODO: When actually loading and working with WoFS data note that the ensemble changed over the years and
+# this will have to be taken into account when creating train/val/testing datasets 
 class Modeler:
     pass
 

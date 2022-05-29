@@ -12,10 +12,13 @@ import argparse
 
 
 # NOTE: netcdf4 also need to be manually installed as dependencies
+#       IMPORTANT: First thing to install on new env is xesmf/esmpy using the command conda install -c conda-forge xesmf esmpy=8.0.0
+#       this will install python as well. Second thing to install is cftime. Third thing is to install dask. Then see netcdf4 above
 
 
 # TODO: Make documentation on how data directories should be organized. (Data downloader should make them this way)
-#       They should be made such that the full date is always a directory somewhere in each file's path.
+#       They should be made such that the full date (but not necessarily the hour) is always either a directory 
+#       (or a set of directories) somewhere in each file's path and/or be included in the name of each file.
 #       It should note that it will fail if those .idx files are in the label/feature directories. Only expected files should be in there.
 class Patcher:
     def __init__(self, config_path, run_num):
@@ -27,9 +30,10 @@ class Patcher:
 
     
     # TODO: Move this to the IOHelper script with collection of functions
+    # TODO: Fix this with changed create_file_list
     def list_possible_level_types(self, list_labels=False):
         # Pull first file in data directory to sample metadata
-        all_data_files = self._glob_files(list_labels = list_labels)
+        all_data_files = self.create_file_list(list_labels = list_labels)
         one_file = all_data_files[0]
 
         # Level types must be printed in a different way depending on filetype
@@ -48,9 +52,10 @@ class Patcher:
 
 
     # TODO: Move this to the IOHelper script with collection of functions
+    # TODO: Fix this with changed create_file_list
     def list_possible_root_keys(self, list_labels=False):
         # Pull first file in data directory to sample metadata
-        all_data_files = self._glob_files(list_labels = list_labels)
+        all_data_files = self.create_file_list(list_labels = list_labels)
         one_file = all_data_files[0]
 
         # Keys must be printed in a different way depending on filetype
@@ -74,7 +79,7 @@ class Patcher:
         label_patches_root = self.config["Output"]["labels_root"]
         n_patches = self.config["Patches"]["number_of_patches"]
 
-        feature_files = self._glob_files()
+        feature_files = self.create_file_list()
         feature_files.sort()
 
         # Choose which files to make into patches
@@ -121,6 +126,11 @@ class Patcher:
 
             feature_patches.to_netcdf(feature_patch_path)
             label_patches.to_netcdf(label_patch_path)
+
+    
+    # For getting list of chosen variables for xarray dict
+    def _load_vars_list(self):
+        pass
 
     
     def _concat_patches(self, patches, patch):
@@ -265,15 +275,10 @@ class Patcher:
         return label_path
 
 
-    def _glob_path_maker(self, root_path, glob_string):
-        return root_path.rstrip("/") + "/" + glob_string.lstrip("/")
-
-
-    # TODO: Maybe change this to "in" instead of "=="?
-    def _date_dir_index_finder(self, glob_path):
-        glob_path_array = np.array(glob_path.split("/"))
-        date_index = np.where(glob_path_array == "*")[0][0] # WAS date_index = np.where(glob_path_array == "*")[0][0]
-        return date_index
+    # def _date_dir_index_finder(self, glob_path):
+    #     glob_path_array = np.array(glob_path.split("/"))
+    #     date_index = np.where(glob_path_array == "*")[0][0] # WAS date_index = np.where(glob_path_array == "*")[0][0]
+    #     return date_index
 
 
     # NOTE: Hour MUST be in format of %H%H and minute MUST be in format of %M%M
@@ -295,16 +300,130 @@ class Patcher:
         return time
 
 
-    def _glob_files(self, list_labels=False):
-        if list_labels:
-            root = self.config["Input"]["labels_root"]
-            glob_string = self.config["Input"]["labels_glob"]
-        else:
-            root = self.config["Input"]["examples_root"]
-            glob_string = self.config["Input"]["examples_glob"]
+    # NOTE: Please make sure the start and end dates in ISO_8601 format
+    def new_select_data_range(self):
+        pass
 
-        glob_path = self._glob_path_maker(root, glob_string)
-        return glob.glob(glob_path)
+
+    # Extracts the most possible time information from data's directory structure and file name 
+    # NOTE: See the required characters for designating where each datetime component is located in each file's path
+    # NOTE: If a lower level datetime unit is used (for example hours or minute), every higher level must also be present
+    # NOTE: datetime_positions chars differ from the datetime.datetime chars needed for "datetime_ISO_formats". May change this later
+    def extract_best_datetime_no_IO(self, root_path, data_file_list, datetime_positions, extraction_regs, datetime_ISO_formats):
+        datetime_positions_path = root_path.rstrip("/") + datetime_positions
+        datetime_chars = datetime_positions_path.split("/")
+
+        datetime_chars_indeces = []
+        datetime_chars_seperated = []
+        for i, datetime_str in enumerate(datetime_chars):
+            for datetime_char in datetime_str:
+                if datetime_char not in ["Y","M","D","h","m"]:
+                    raise Exception("A given datetime position character is not one of the accepted options.")
+                datetime_chars_seperated.append(datetime_char)
+                datetime_chars_indeces.append(i)
+
+        if len(datetime_chars_indeces) == 0:
+            raise Exception("Giving no datetime information in the file names or in each file's path is not supported.")
+
+        # TODO: Double check datetime64[char] have been chosen right
+        if "m" in datetime_chars_seperated:
+            dataset_date_resolution = "datetime64[m]"
+        elif "h" in datetime_chars_seperated:
+            dataset_date_resolution = "datetime64[h]"
+        elif "D" in datetime_chars_seperated:
+            dataset_date_resolution = "datetime64[D]"
+        elif "M" in datetime_chars_seperated:
+            dataset_date_resolution = "datetime64[M]"
+        else:
+            dataset_date_resolution = "datetime64[Y]"
+
+        files_to_remove = []
+        datetimes = []
+        for data_file in data_file_list:
+            file_datetime_read_fail = False
+            data_file_split = data_file.split("/")
+
+            minute_str = ""
+            hour_str = ""
+            day_str = ""
+            month_str = ""
+            year_str = ""
+            
+            for i, datetime_char in enumerate(datetime_chars_seperated):
+                reg_extracted = re.search(extraction_regs[i], data_file_split[datetime_chars_indeces[i]])
+                if not reg_extracted:
+                    file_datetime_read_fail = True
+                    break
+                time_component_str = reg_extracted.group(1)
+
+                if datetime_char == "Y":
+                    datetime_obj = datetime.strptime(time_component_str, datetime_ISO_formats[i])
+                    year_str = datetime_obj.strftime("%Y")
+                elif datetime_char == "M":
+                    datetime_obj = datetime.strptime(time_component_str, datetime_ISO_formats[i])
+                    month_str = "-" + datetime_obj.strftime("%m")
+                elif datetime_char == "D":
+                    datetime_obj = datetime.strptime(time_component_str, datetime_ISO_formats[i])
+                    day_str = "-" + datetime_obj.strftime("%d")
+                elif datetime_char == "h":
+                    datetime_obj = datetime.strptime(time_component_str, datetime_ISO_formats[i])
+                    hour_str = "T" + datetime_obj.strftime("%H")
+                elif datetime_char == "m":
+                    datetime_obj = datetime.strptime(time_component_str, datetime_ISO_formats[i])
+                    minute_str = ":" + datetime_obj.strftime("%M")
+
+            if file_datetime_read_fail:
+                files_to_remove.append(data_file)
+                continue
+
+            datetime_np_str = year_str + month_str + day_str + hour_str + minute_str
+
+            try:
+                datetime_np = np.datetime64(datetime_np_str)
+            except:
+                files_to_remove.append(data_file)
+                continue
+
+            datetimes.append(datetime_np)
+
+        return datetimes, dataset_date_resolution
+
+
+    # TODO: May not need this in a function anymore???
+    def _glob_path_maker(self, root_path, glob_string):
+        return root_path.rstrip("/") + "/" + glob_string.lstrip("/")
+
+
+    # NOTE: In path_glob only include wild card operators for each directory level you want to search across.
+    #       The regex can handle any filtering.
+    def create_file_list(self, root_dir, path_glob, path_regex):
+        glob_path = self._glob_path_maker(root_dir, path_glob)
+        unfiltered_file_list = glob.glob(glob_path)
+
+        file_list = []
+        wildcard_indeces = np.where(np.array(glob_path.split("/")) == "*")[0]
+        for file in unfiltered_file_list:
+            file_array = np.array(file.split("/"))
+            reg_bools = []
+            for i, reg in enumerate(path_regex):
+                reg_bool = re.search(reg, file_array[wildcard_indeces[i]])
+                reg_bools.append(reg_bool)
+
+            if np.all(np.array(reg_bools)):
+                file_list.append(file)
+
+        file_list.sort()
+        return file_list
+
+        # if list_labels:
+        #     root = self.config["Input"]["labels_root"]
+        #     glob_string = self.config["Input"]["labels_glob"]
+        # else:
+        #     root = self.config["Input"]["examples_root"]
+        #     glob_string = self.config["Input"]["examples_glob"]
+
+        
+        # return glob.glob(glob_path)
 
 
 '''

@@ -9,11 +9,14 @@ import re
 import datetime
 import copy 
 import argparse
+import warnings
 
 
 # NOTE: netcdf4 also need to be manually installed as dependencies
 #       IMPORTANT: First thing to install on new env is xesmf/esmpy using the command conda install -c conda-forge xesmf esmpy=8.0.0
 #       this will install python as well. Second thing to install is cftime. Third thing is to install dask. Then see netcdf4 above
+
+# NOTE: Spatial dataset delineation in file/path naming not currently supported.
 
 
 # TODO: Make documentation on how data directories should be organized. (Data downloader should make them this way)
@@ -72,35 +75,180 @@ class Patcher:
         else:
             raise IOError(os.path.split(one_file)[-1] + " is an unsupported filetype. Only filetypes supported currenly are .nc and .grib/.grib2")
 
+
+    # TODO: MAJOR: Make sure this randomizes time order so it doesn't always return first time first
+    # TODO: Check to see if I need to close xarray datasets for memory issues
+    # NOTE: Only works in multi-dateset case. Not to be used for 1 dataset case.
+    def _compare_datetimes_with_IO(self, current_index, chosen_date_indeces, all_datetimes,
+                                         data_settings_cfgs, datasets_paths, chosen_resolution, 
+                                         solution_indeces_files=None, solution_indeces_times=None, chosen_datetimes_adjusted=None):
+        found_files = False
+        if solution_indeces_files is None:
+            solution_indeces_files = np.zeros(len(chosen_date_indeces))
+        if solution_indeces_times is None:
+            solution_indeces_times = np.zeros(len(chosen_date_indeces))
+        if chosen_datetimes_adjusted is None:
+            chosen_datetimes_adjusted = np.zeros(len(chosen_date_indeces))
+
+        for i in range(solution_indeces_files[current_index], len(chosen_date_indeces[current_index])):
+            if data_settings_cfgs[current_index]["Data"]["has_time_dim"]:
+                time_dim_name = data_settings_cfgs[current_index]["Data"]["time_dim_name"]
+                ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
+
+                for j in range(solution_indeces_times[current_index], len(ds[time_dim_name])):
+                    current_datetime = ds[time_dim_name][j].to_numpy().astype(chosen_resolution)
+                    chosen_datetimes_adjusted[current_index] = current_datetime
+                    solution_indeces_files[current_index] = i
+                    solution_indeces_times[current_index] = j
+
+                    if current_index == 0:
+                        found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                                                                                                                    data_settings_cfgs, datasets_paths, 
+                                                                                                                    chosen_resolution, solution_indeces_files, 
+                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted)
+
+                    elif chosen_datetimes_adjusted[current_index-1] == current_datetime:
+                        if current_index == len(chosen_date_indeces)-1:
+                            found_files = True
+
+                        else:
+                            found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                                                                                                                        data_settings_cfgs, datasets_paths, 
+                                                                                                                        chosen_resolution, solution_indeces_files, 
+                                                                                                                        solution_indeces_times, chosen_datetimes_adjusted)
+
+                    if found_files:
+                        break
+
+            else:
+                current_datetime = all_datetimes[current_index][chosen_date_indeces[current_index][i]].astype(chosen_resolution)
+                chosen_datetimes_adjusted[current_index] = current_datetime
+                solution_indeces_files[current_index] = i
+                solution_indeces_times[current_index] = None
+
+                if current_index == 0:
+                    found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                                                                                                                    data_settings_cfgs, datasets_paths, 
+                                                                                                                    chosen_resolution, solution_indeces_files, 
+                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted)
+
+                elif chosen_datetimes_adjusted[current_index-1] == current_datetime:
+                    if current_index == len(chosen_date_indeces)-1:
+                        found_files = True
+
+                    else:
+                        found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                                                                                                                    data_settings_cfgs, datasets_paths, 
+                                                                                                                    chosen_resolution, solution_indeces_files, 
+                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted)                                     
+
+            if found_files:
+                break
+
+
+        return found_files, solution_indeces_files, solution_indeces_times
+
     
-    def run(self):
-        patch_size = self.config["Patches"]["patch_size"]
-        feature_patches_root = self.config["Output"]["examples_root"]
-        label_patches_root = self.config["Output"]["labels_root"]
-        n_patches = self.config["Patches"]["number_of_patches"]
+    def run(self, settings_dict):
+        patch_size = settings_dict["Patches"]["patch_size"]
+        feature_patches_root = settings_dict["Output"]["examples_root"]
+        label_patches_root = settings_dict["Output"]["labels_root"]
+        n_patches = settings_dict["Patches"]["number_of_patches"]
+        patches_per_time = settings_dict["Patches"]["patches_per_unit_time"]
 
-        feature_files = self.create_file_list()
-        feature_files.sort()
+        data_settings_cfgs = []
+        for data_settings_cfg in settings_dict["Input_Data"]["input_cfg_list"]:
+            config = configparser.ConfigParser()
+            config.read(data_settings_cfg)
+            data_settings_cfgs.append(cfg_parser(config))
 
-        # Choose which files to make into patches
-        feature_files = self._select_data_range(feature_files)
+        # TODO: Maybe put the following loop into its own method?
+        datasets_paths = []
+        datasets_datetimes = []
+        datasets_date_resolutions = []
+        datasets_date_resolution_vals = []
+        for data_settings_cfg in data_settings_cfgs:
+            file_list = self.create_file_list(data_settings_cfg["Path"]["root_dir"], 
+                                              data_settings_cfg["Path"]["path_glob"], 
+                                              data_settings_cfg["Path"]["path_reg"])
 
-        # Get a label file for each feature file and
-        # remove any feature files that don't have a corresponding label
-        # TODO: Make boolean check system for case where we don't want to make label patches at the same time as feature patches
-        # BUT PATCHES WILL STILL BE NEEDED FOR CHECKING IF FEATURE FILES NEED TO BE REMOVED
-        feature_files, label_files = self._get_label_files(feature_files)
+            dateset_datetimes, dataset_date_resolution, dataset_date_resolution_val = self.extract_best_datetime_no_IO(data_settings_cfg["Path"]["root_dir"],
+                                                                                      file_list, data_settings_cfg["Path"]["dt_positions"],
+                                                                                      data_settings_cfg["Path"]["dt_regs"],
+                                                                                      data_settings_cfg["Path"]["dt_formats"])
 
+            file_list = self.select_data_range(file_list, data_settings_cfg["Bounds"]["data_start"], data_settings_cfg["Bounds"]["data_end"],
+                                               data_settings_cfg["Bounds"]["use_date_for_data_range"], dateset_datetimes, dataset_date_resolution)
+
+            datasets_paths.append(file_list)
+            datasets_datetimes.append(dateset_datetimes)
+            datasets_date_resolutions.append(dataset_date_resolution)
+            datasets_date_resolution_vals.append(dataset_date_resolution_val)
+
+        # Set top level lists to numpy arrays for more functionality
+        datasets_paths = np.array(datasets_paths, dtype=list)
+        datasets_datetimes = np.array(datasets_datetimes, dtype=list)
+        datasets_date_resolutions = np.array(datasets_date_resolutions)
+        datasets_date_resolution_vals = np.array(datasets_date_resolution_vals)
+
+        # Sort by how high each dataset's resolution is
+        inds = datasets_date_resolution_vals.argsort()
+        datasets_paths = datasets_paths[inds]
+        datasets_datetimes = datasets_datetimes[inds]
+        datasets_date_resolutions = datasets_date_resolutions[inds]
+        datasets_date_resolution_vals = datasets_date_resolution_vals[inds]
+
+        loop_number = n_patches // patches_per_time
         feature_patches = None
         label_patches = None
+        date_indeces = np.random.choice(np.arange(0,len(datasets_paths[-1])), size=len(datasets_paths[-1]), replace=False)
+        date_counter = 0
 
-        for n in tqdm(np.arange(0,n_patches)):
-            date_index = np.random.randint(0,len(feature_files))
-            feature_file = feature_files[date_index]
-            label_file = label_files[date_index]
+        # Have numpy datetime64 objects with dates adjusted for the lowest resolution we have ready for all datasets
+        # TODO: Double check this idea by considering it once more
+        lowest_resolution_dates = []
+        for dataset_datetimes in datasets_datetimes:
+            datetimes_adjusted = []
+            for dataset_datetime in dataset_datetimes:
+                datetimes_adjusted.append(dataset_datetime.astype(datasets_date_resolutions[0]))
+            lowest_resolution_dates.append(datetimes_adjusted)
+
+        chosen_date_indeces = []
+        for i in range(len(datasets_paths)):
+            chosen_date_indeces.append([])
+
+        load_new_files = True
+        solution_indeces_files = None
+        solution_indeces_times = None
+
+        for n in tqdm(np.arange(0,loop_number)):
+
+            if len(chosen_date_indeces) != 1:
+
+                while date_counter < len(date_indeces) and load_new_files:
+
+                    for i, dataset_datetimes in enumerate(lowest_resolution_dates):
+
+                        dataset_datetimes = np.array(dataset_datetimes) #TODO: check if I have to specify datetime64 here?
+                        chosen_date_indeces[i] = np.where(dataset_datetimes == dataset_datetimes[-1][date_indeces[date_counter]])[0]
+
+                    date_counter = date_counter + 1
+                    if np.all([len(i) != 0 for i in chosen_date_indeces]):
+                        load_new_files = False
+                        solution_indeces_files = np.zeros(len(chosen_date_indeces))
+                        solution_indeces_times = np.zeros(len(chosen_date_indeces))
+                        break
+
+                if date_counter == len(date_indeces) and np.any([len(i) == 0 for i in chosen_date_indeces]):
+                    warnings.warn('WARNING: Ran out of files with matching datetimes. Number of completed patches may be less than expected. Please consider adjusting "patches_per_unit_time"')
+                    break
+
+                self._compare_datetimes_with_IO()
+
+            # HERE!!!!!
+
 
             # NOTE: netcdf4 package required
-            #       assumes that feature and label gridsizes are the same. DataMiner should enforce this.
             feature_file_ds = xr.open_dataset(feature_file)
             label_file_ds = xr.open_dataset(label_file)
 
@@ -157,25 +305,24 @@ class Patcher:
         return feature_patch, label_patch
     
 
-    # Also removes any feature file that does not have a corresponding label
-    def _get_label_files(self, feature_files):
-        feature_files_to_remove = []
-        label_files = []
-        for feature_file in feature_files:
-            label_file = self._find_label_path(feature_file)
-            if label_file is None:
-                feature_files_to_remove.append(feature_file)
-            else:
-                label_files.append(label_file)
+    # # Also removes any feature file that does not have a corresponding label
+    # def _get_label_files(self, feature_files):
+    #     feature_files_to_remove = []
+    #     label_files = []
+    #     for feature_file in feature_files:
+    #         label_file = self._find_label_path(feature_file)
+    #         if label_file is None:
+    #             feature_files_to_remove.append(feature_file)
+    #         else:
+    #             label_files.append(label_file)
             
-        for file_to_remove in feature_files_to_remove:
-            feature_files.remove(file_to_remove)
+    #     for file_to_remove in feature_files_to_remove:
+    #         feature_files.remove(file_to_remove)
 
-        if len(feature_files) != len(label_files):
-            raise Exception("Method _get_label_files has failed. Not all dud feature files removed.")
+    #     if len(feature_files) != len(label_files):
+    #         raise Exception("Method _get_label_files has failed. Not all dud feature files removed.")
 
-        return feature_files, label_files
-
+    #     return feature_files, label_files
 
 
     # Three possible options:
@@ -183,38 +330,22 @@ class Patcher:
     # 2. use hard indeces to set range
     # 3. use percentages (real numbers) to set range
     # NOTE: Does not check validity of selections. May add that later
-    def _select_data_range(self, file_list):
-        data_start = self.config["Patches"]["data_start"]
-        data_end = self.config["Patches"]["data_end"]
-        use_date = self.config["Patches"]["use_date_for_data_range"]
-        date_format = self.config["Input"]["date_dir_format"]
-        feature_root = self.config["Input"]["examples_root"]
-        feature_glob = self.config["Input"]["examples_glob"]
-
-        glob_path = self._glob_path_maker(feature_root, feature_glob)
-        feature_path_date_index = self._date_dir_index_finder(glob_path)
-
-        date_format_ISO_8601 = "%Y-%m-%d"
+    # NOTE: Please make sure the start and end dates in ISO_8601 format
+    def select_data_range(self, file_list, data_start, data_end, use_date=False, dates_list=None, dataset_date_resolution=None):
         file_list = np.array(file_list)
 
         if use_date:
             if data_start is not None:
-                start_date = datetime.datetime.strptime(data_start, date_format).strftime(date_format_ISO_8601)
-                start_date = np.datetime64(start_date)
+                start_date = np.datetime64(data_start).astype(dataset_date_resolution)
             if data_end is not None:
-                end_date = datetime.datetime.strptime(data_end, date_format).strftime(date_format_ISO_8601)
-                end_date = np.datetime64(end_date)
-
-            file_date_strings = [file.split("/")[feature_path_date_index] for file in file_list]
-            file_dates = [datetime.datetime.strptime(file_date_str, date_format) for file_date_str in file_date_strings]
-            file_dates = np.array([file_date.strftime(date_format_ISO_8601) for file_date in file_dates], dtype="datetime64")
+                end_date = np.datetime64(data_end).astype(dataset_date_resolution)
 
             if data_start is not None and data_end is not None:
-                return file_list[np.where(np.logical_and(file_dates >= start_date, file_dates <= end_date))].tolist()
+                return file_list[np.where(np.logical_and(dates_list >= start_date, dates_list <= end_date))].tolist()
             elif data_start is None and data_end is not None:
-                return file_list[np.where(file_dates <= end_date)].tolist()
+                return file_list[np.where(dates_list <= end_date)].tolist()
             elif data_start is not None and data_end is None:
-                return file_list[np.where(file_dates >= start_date)].tolist()
+                return file_list[np.where(dates_list >= start_date)].tolist()
             else:
                 return file_list.tolist()
         
@@ -237,42 +368,42 @@ class Patcher:
             return file_list[start_index:end_index].tolist()
                 
 
-    def _find_label_path(self, feature_file):
-        feature_root = self.config["Input"]["examples_root"]
-        feature_glob = self.config["Input"]["examples_glob"]
-        feature_hour_regex = self.config["Input"]["examples_hour_regex"]
-        feature_minute_regex = self.config["Input"]["examples_minute_regex"]
-        labels_root = self.config["Input"]["labels_root"]
-        labels_glob = self.config["Input"]["labels_glob"]
-        labels_hour_regex = self.config["Input"]["labels_hour_regex"]
-        labels_minute_regex = self.config["Input"]["labels_minute_regex"]
+    # def _find_label_path(self, feature_file):
+    #     feature_root = self.config["Input"]["examples_root"]
+    #     feature_glob = self.config["Input"]["examples_glob"]
+    #     feature_hour_regex = self.config["Input"]["examples_hour_regex"]
+    #     feature_minute_regex = self.config["Input"]["examples_minute_regex"]
+    #     labels_root = self.config["Input"]["labels_root"]
+    #     labels_glob = self.config["Input"]["labels_glob"]
+    #     labels_hour_regex = self.config["Input"]["labels_hour_regex"]
+    #     labels_minute_regex = self.config["Input"]["labels_minute_regex"]
 
-        glob_path = self._glob_path_maker(feature_root, feature_glob)
-        feature_path_date_index = self._date_dir_index_finder(glob_path)
-        feature_path_array = feature_file.split("/")
-        date = feature_path_array[feature_path_date_index]
+    #     glob_path = self._glob_path_maker(feature_root, feature_glob)
+    #     feature_path_date_index = self._date_dir_index_finder(glob_path)
+    #     feature_path_array = feature_file.split("/")
+    #     date = feature_path_array[feature_path_date_index]
 
-        glob_path = self._glob_path_maker(labels_root, labels_glob)
-        label_path_date_index = self._date_dir_index_finder(glob_path)
-        glob_path_array = glob_path.split("/")
-        glob_path_array[label_path_date_index] = date
+    #     glob_path = self._glob_path_maker(labels_root, labels_glob)
+    #     label_path_date_index = self._date_dir_index_finder(glob_path)
+    #     glob_path_array = glob_path.split("/")
+    #     glob_path_array[label_path_date_index] = date
 
-        feature_filename = os.path.split(feature_file)[-1]
-        feature_time = self._get_time_from_regex(feature_hour_regex, feature_minute_regex, feature_filename)
+    #     feature_filename = os.path.split(feature_file)[-1]
+    #     feature_time = self._get_time_from_regex(feature_hour_regex, feature_minute_regex, feature_filename)
 
-        label_glob_with_date = "/".join(glob_path_array)
-        label_files = glob.glob(label_glob_with_date)
+    #     label_glob_with_date = "/".join(glob_path_array)
+    #     label_files = glob.glob(label_glob_with_date)
 
-        label_path = None
-        for label_file in label_files:
-            label_filename = os.path.split(label_file)[-1]
-            label_time = self._get_time_from_regex(labels_hour_regex, labels_minute_regex, label_filename)
+    #     label_path = None
+    #     for label_file in label_files:
+    #         label_filename = os.path.split(label_file)[-1]
+    #         label_time = self._get_time_from_regex(labels_hour_regex, labels_minute_regex, label_filename)
 
-            if feature_time == label_time:
-                label_path = label_file
-                break
+    #         if feature_time == label_time:
+    #             label_path = label_file
+    #             break
 
-        return label_path
+    #     return label_path
 
 
     # def _date_dir_index_finder(self, glob_path):
@@ -282,33 +413,29 @@ class Patcher:
 
 
     # NOTE: Hour MUST be in format of %H%H and minute MUST be in format of %M%M
-    def _get_time_from_regex(self, hour_reg, min_reg, filename):
-        reg_hour = re.search(hour_reg, filename)
-        if not reg_hour:
-            raise IOError("A filename_hour_regex is not valid. Can't find hour.")
-        hour = reg_hour.group(1)
+    # def _get_time_from_regex(self, hour_reg, min_reg, filename):
+    #     reg_hour = re.search(hour_reg, filename)
+    #     if not reg_hour:
+    #         raise IOError("A filename_hour_regex is not valid. Can't find hour.")
+    #     hour = reg_hour.group(1)
 
-        if min_reg is not None:
-            reg_min = re.search(min_reg, filename)
-            if not reg_min:
-                raise IOError("A filename_minute_regex is not valid. Can't find minute.")
-            min = reg_min.group(1)
-        else:
-            min = "00"
+    #     if min_reg is not None:
+    #         reg_min = re.search(min_reg, filename)
+    #         if not reg_min:
+    #             raise IOError("A filename_minute_regex is not valid. Can't find minute.")
+    #         min = reg_min.group(1)
+    #     else:
+    #         min = "00"
         
-        time = hour + min
-        return time
+    #     time = hour + min
+    #     return time
 
 
-    # NOTE: Please make sure the start and end dates in ISO_8601 format
-    def new_select_data_range(self):
-        pass
-
-
-    # Extracts the most possible time information from data's directory structure and file name 
+    # Extracts the best possible time information from data's directory structure and file name 
     # NOTE: See the required characters for designating where each datetime component is located in each file's path
     # NOTE: If a lower level datetime unit is used (for example hours or minute), every higher level must also be present
     # NOTE: datetime_positions chars differ from the datetime.datetime chars needed for "datetime_ISO_formats". May change this later
+    # NOTE: In the path/name of each file there must be at least SOME datetime information. The no-information scenario is not currently supported
     def extract_best_datetime_no_IO(self, root_path, data_file_list, datetime_positions, extraction_regs, datetime_ISO_formats):
         datetime_positions_path = root_path.rstrip("/") + datetime_positions
         datetime_chars = datetime_positions_path.split("/")
@@ -328,14 +455,19 @@ class Patcher:
         # TODO: Double check datetime64[char] have been chosen right
         if "m" in datetime_chars_seperated:
             dataset_date_resolution = "datetime64[m]"
+            dataset_date_resolution_val = 4
         elif "h" in datetime_chars_seperated:
             dataset_date_resolution = "datetime64[h]"
+            dataset_date_resolution_val = 3
         elif "D" in datetime_chars_seperated:
             dataset_date_resolution = "datetime64[D]"
+            dataset_date_resolution_val = 2
         elif "M" in datetime_chars_seperated:
             dataset_date_resolution = "datetime64[M]"
+            dataset_date_resolution_val = 1
         else:
             dataset_date_resolution = "datetime64[Y]"
+            dataset_date_resolution_val = 0
 
         files_to_remove = []
         datetimes = []
@@ -386,7 +518,7 @@ class Patcher:
 
             datetimes.append(datetime_np)
 
-        return datetimes, dataset_date_resolution
+        return datetimes, dataset_date_resolution, dataset_date_resolution_val
 
 
     # TODO: May not need this in a function anymore???

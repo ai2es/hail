@@ -1,4 +1,3 @@
-from scipy.fft import dst
 import xarray as xr
 import pygrib
 import numpy as np
@@ -258,7 +257,6 @@ class Patcher:
                     if date_counter == len(date_indeces) and load_new_files:
                         break
 
-                    # TODO: MAJOR: Make sure to increment the last element of solution_indeces_files/solution_indeces_times when done with them (way below)
                     found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(0,chosen_date_indeces, datasets_datetimes,
                                                                                                                 data_settings_cfgs,datasets_paths,chosen_resolution,
                                                                                                                 solution_indeces_files=solution_indeces_files,
@@ -288,6 +286,7 @@ class Patcher:
 
             loaded_datasets = []
             reproj_ds = None
+            reproj_ds_index = 0
             for i, (file_index, time_index) in enumerate(zip(solution_indeces_files, solution_indeces_times)):
                 ds = xr.open_dataset(datasets_paths[i][file_index])
                 if data_settings_cfgs[i]["Data"]["has_time_cord"]:
@@ -312,6 +311,7 @@ class Patcher:
 
                 if data_settings_cfgs[i]["Data"]["reproj_target"]:
                     reproj_ds = ds
+                    reproj_ds_index = i
 
                 loaded_datasets.append(ds)
 
@@ -344,7 +344,7 @@ class Patcher:
                 if dataset_empty_or_out_of_range:
                     break
 
-                ds_reproj = ds_reproj.where(np.logical_not(np.isnan(ds_reproj)), drop=True)
+                # ds_reproj = ds_reproj.where(np.logical_not(np.isnan(ds_reproj)), drop=True)
                 for key_name in ds_reproj.keys():
                     data_var = ds_reproj[key_name].to_numpy()
                     possible_pixels = np.where(np.logical_not(np.isnan(data_var)))
@@ -361,51 +361,40 @@ class Patcher:
 
             pixel_counter = 0
             pixel_indeces = np.random.choice(np.arange(0,len(possible_x_indeces_for_patches)), size=len(possible_x_indeces_for_patches), replace=False)
+            x_max = reproj_ds.dims[data_settings_cfgs[reproj_ds_index]["Data"]["x_dim_name"]]
+            y_max = reproj_ds.dims[data_settings_cfgs[reproj_ds_index]["Data"]["y_dim_name"]]
+            patches = []
+            grid_size = [x_max, y_max]
             for i in range(patches_per_time):
                 has_nans_in_patch = True
-                while has_nans_in_patch:
-                     # HERE!!!!!
+                while has_nans_in_patch and pixel_counter < len(pixel_indeces):
+                    has_nans_in_patch = False
+                    x_i = possible_x_indeces_for_patches[pixel_indeces[pixel_counter]]
+                    y_i = possible_y_indeces_for_patches[pixel_indeces[pixel_counter]]
+                    for ds in reproj_datasets:
+                        patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i)
+                        for key_name in patch.keys():
+                            data_var = patch[key_name].to_numpy()
+                            if np.isnan(data_var).any():
+                                has_nans_in_patch = True
+                        if has_nans_in_patch:
+                            patches = []
+                            break
+                        patches.append(patch)
+                    pixel_counter = pixel_counter + 1
+
+                for j, patch in enumerate(patches):
+                    if data_settings_cfgs[j]["Data"]["is_label_data"]:
+                        label_patches = self._concat_patches(label_patches, patch)
+                    else:
+                        feature_patches = self._concat_patches(feature_patches, patch)
             
-
-                
-            
-            # TODO: When supplying gridsize to the make patches function, make sure that grid size is an array of len of the number of datasets (it could differ across datasets becuase of ds.where)
-            # TODO: Make sure system that patches checks if nans exist anywhere in the patch FOR ALL DATASETS. Becuase dataset nan positions differ after reproj
-                
-                
-
-                    
-
-
-
-           
-
-
-            # NOTE: netcdf4 package required
-            feature_file_ds = xr.open_dataset(feature_file)
-            label_file_ds = xr.open_dataset(label_file)
-
-            x_max = feature_file_ds.dims["x"]
-            y_max = feature_file_ds.dims["y"]
-            grid_size = [x_max, y_max]
-
-            x_i = np.random.randint(0,x_max)
-            y_i = np.random.randint(0,y_max)
-
-            # Next bit of code is taken from lydia's scripts with modifications
-            feature_patch, label_patch = self._make_patch(feature_file_ds, label_file_ds, grid_size, patch_size, x_i, y_i)
-
-            if feature_patch is None:
-                continue
-
-            feature_patches = self._concat_patches(feature_patches, feature_patch)
-            label_patches = self._concat_patches(label_patches, label_patch)
-
         if feature_patches is not None:
             feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
-            label_patch_path = os.path.join(label_patches_root, str(self.run_num) + ".nc")
-
             feature_patches.to_netcdf(feature_patch_path)
+        
+        if label_patches is not None:
+            label_patch_path = os.path.join(label_patches_root, str(self.run_num) + ".nc")
             label_patches.to_netcdf(label_patch_path)
 
     
@@ -418,19 +407,17 @@ class Patcher:
         return patches
     
 
-    def _make_patch(self, feature_file_ds, label_file_ds, grid_size, patch_size, x, y):
+    def _make_patch(self, file_ds, grid_size, patch_size, x, y):
         halfstep = int(patch_size/2)
         y_max = grid_size[1]-halfstep
         x_max = grid_size[0]-halfstep
 
-        feature_patch = None
-        label_patch = None
+        patch = None
 
         if x >= halfstep and x < x_max and y >= halfstep and y < y_max:
-            feature_patch = feature_file_ds.isel(x=slice(x-halfstep,x+halfstep),y=slice(y-halfstep,y+halfstep))
-            label_patch = label_file_ds.isel(x=slice(x-halfstep,x+halfstep),y=slice(y-halfstep,y+halfstep))
+            patch = file_ds.isel(x=slice(x-halfstep,x+halfstep),y=slice(y-halfstep,y+halfstep))
 
-        return feature_patch, label_patch
+        return patch
     
 
     # # Also removes any feature file that does not have a corresponding label

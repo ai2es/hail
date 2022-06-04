@@ -25,11 +25,11 @@ import xesmf as xe
 #       (or a set of directories) somewhere in each file's path and/or be included in the name of each file.
 #       It should note that it will fail if those .idx files are in the label/feature directories. Only expected files should be in there.
 class Patcher:
-    def __init__(self, config_path, run_num):
-        # Parse in config file specified by config_path. See examples given in repo
-        config = configparser.ConfigParser()
-        config.read(config_path)
-        self.config = cfg_parser(config)
+    def __init__(self, run_num):
+        # # Parse in config file specified by config_path. See examples given in repo
+        # config = configparser.ConfigParser()
+        # config.read(config_path)
+        # self.config = cfg_parser(config)
         self.run_num = run_num
 
     
@@ -733,5 +733,8 @@ if __name__ == "__main__":
 
 
     # TODO: Switch this to command line argument
-    patcher = Patcher(args.config_path, args.run_num)
-    patcher.run()
+    patcher = Patcher(args.run_num)
+    config = configparser.ConfigParser()
+    config.read(args.config_path)
+    config = cfg_parser(config)
+    patcher.run(config)

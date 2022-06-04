@@ -6,7 +6,7 @@ import os
 import glob
 from tqdm import tqdm
 import re
-import datetime
+from datetime import datetime
 import copy 
 import argparse
 import warnings
@@ -363,7 +363,7 @@ class Patcher:
             pixel_indeces = np.random.choice(np.arange(0,len(possible_x_indeces_for_patches)), size=len(possible_x_indeces_for_patches), replace=False)
             x_max = reproj_ds.dims[data_settings_cfgs[reproj_ds_index]["Data"]["x_dim_name"]]
             y_max = reproj_ds.dims[data_settings_cfgs[reproj_ds_index]["Data"]["y_dim_name"]]
-            patches = []
+            all_patches = []
             grid_size = [x_max, y_max]
             for i in range(patches_per_time):
                 has_nans_in_patch = True
@@ -371,23 +371,34 @@ class Patcher:
                     has_nans_in_patch = False
                     x_i = possible_x_indeces_for_patches[pixel_indeces[pixel_counter]]
                     y_i = possible_y_indeces_for_patches[pixel_indeces[pixel_counter]]
-                    for ds in reproj_datasets:
-                        patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i)
+                    single_dataset_patches = []
+                    for j, ds in enumerate(reproj_datasets):
+                        patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i, data_settings_cfgs[j]["Data"]["x_dim_name"], data_settings_cfgs[j]["Data"]["y_dim_name"])
+                        if patch is None:
+                            has_nans_in_patch = True
+                            single_dataset_patches = []
+                            break
                         for key_name in patch.keys():
                             data_var = patch[key_name].to_numpy()
                             if np.isnan(data_var).any():
                                 has_nans_in_patch = True
                         if has_nans_in_patch:
-                            patches = []
+                            single_dataset_patches = []
                             break
-                        patches.append(patch)
+                        single_dataset_patches.append(patch)
                     pixel_counter = pixel_counter + 1
 
-                for j, patch in enumerate(patches):
-                    if data_settings_cfgs[j]["Data"]["is_label_data"]:
-                        label_patches = self._concat_patches(label_patches, patch)
-                    else:
-                        feature_patches = self._concat_patches(feature_patches, patch)
+                    # TODO Make warning in above while loop (or somwhere after) warning that we ran out of pixels. Make similar to other while loop warning.
+                
+                if len(single_dataset_patches) != 0:
+                    all_patches.append(single_dataset_patches)
+
+                for single_dataset_patches in all_patches:
+                    for j, patch in enumerate(single_dataset_patches):
+                        if data_settings_cfgs[j]["Data"]["is_label_data"]:
+                            label_patches = self._concat_patches(label_patches, patch)
+                        else:
+                            feature_patches = self._concat_patches(feature_patches, patch)
             
         if feature_patches is not None:
             feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
@@ -407,7 +418,7 @@ class Patcher:
         return patches
     
 
-    def _make_patch(self, file_ds, grid_size, patch_size, x, y):
+    def _make_patch(self, file_ds, grid_size, patch_size, x, y, x_dim_name, y_dim_name):
         halfstep = int(patch_size/2)
         y_max = grid_size[1]-halfstep
         x_max = grid_size[0]-halfstep
@@ -415,7 +426,8 @@ class Patcher:
         patch = None
 
         if x >= halfstep and x < x_max and y >= halfstep and y < y_max:
-            patch = file_ds.isel(x=slice(x-halfstep,x+halfstep),y=slice(y-halfstep,y+halfstep))
+            patch = file_ds[{x_dim_name:slice(x-halfstep,x+halfstep), y_dim_name:slice(y-halfstep,y+halfstep)}]
+            # patch = file_ds.isel(x=slice(x-halfstep,x+halfstep),y=slice(y-halfstep,y+halfstep))
 
         return patch
     
@@ -552,8 +564,8 @@ class Patcher:
     # NOTE: datetime_positions chars differ from the datetime.datetime chars needed for "datetime_ISO_formats". May change this later
     # NOTE: In the path/name of each file there must be at least SOME datetime information. The no-information scenario is not currently supported
     def extract_best_datetime_no_IO(self, root_path, data_file_list, datetime_positions, extraction_regs, datetime_ISO_formats):
-        datetime_positions_path = root_path.rstrip("/") + datetime_positions
-        datetime_chars = datetime_positions_path.split("/")
+        datetime_chars = datetime_positions.split("/")
+        root_len = len(root_path.rstrip("/").split("/"))
 
         datetime_chars_indeces = []
         datetime_chars_seperated = []
@@ -562,7 +574,7 @@ class Patcher:
                 if datetime_char not in ["Y","M","D","h","m"]:
                     raise Exception("A given datetime position character is not one of the accepted options.")
                 datetime_chars_seperated.append(datetime_char)
-                datetime_chars_indeces.append(i)
+                datetime_chars_indeces.append(i + root_len)
 
         if len(datetime_chars_indeces) == 0:
             raise Exception("Giving no datetime information in the file names or in each file's path is not supported.")
@@ -654,11 +666,15 @@ class Patcher:
             reg_bools = []
             for i, reg in enumerate(path_regex):
                 reg_bool = re.search(reg, file_array[wildcard_indeces[i]])
-                reg_bools.append(reg_bool)
+                if reg_bool:
+                    reg_bools.append(True)
+                else:
+                    reg_bools.append(False)
 
             if np.all(np.array(reg_bools)):
                 file_list.append(file)
 
+        # TODO: Make the program crash if file_list stays empty
         file_list.sort()
         return file_list
 
@@ -738,3 +754,5 @@ if __name__ == "__main__":
     config.read(args.config_path)
     config = cfg_parser(config)
     patcher.run(config)
+
+# TODO: REMINDER: WoFS file and data names change all the time. Look out for this!

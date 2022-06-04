@@ -85,11 +85,13 @@ class Patcher:
                                          solution_indeces_files=None, solution_indeces_times=None, chosen_datetimes_adjusted=None):
         found_files = False
         if solution_indeces_files is None:
-            solution_indeces_files = np.zeros(len(chosen_date_indeces))
+            solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int8)
         if solution_indeces_times is None:
-            solution_indeces_times = np.zeros(len(chosen_date_indeces))
+            solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int8)
         if chosen_datetimes_adjusted is None:
-            chosen_datetimes_adjusted = np.zeros(len(chosen_date_indeces))
+            chosen_datetimes_adjusted = []
+            for i in range(len(chosen_date_indeces)):
+                chosen_datetimes_adjusted.append(None)
 
         for i in range(solution_indeces_files[current_index], len(chosen_date_indeces[current_index])):
             if data_settings_cfgs[current_index]["Data"]["has_time_cord"]:
@@ -97,11 +99,11 @@ class Patcher:
                 ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
 
                 for j in range(solution_indeces_times[current_index], len(ds[time_cord_name])):
-                    current_datetime = ds[time_cord_name][j].to_numpy().astype(chosen_resolution)
+                    current_datetime = ds[time_cord_name].to_numpy()[j].astype(chosen_resolution)
                     chosen_datetimes_adjusted[current_index] = current_datetime
 
                     if current_index == 0:
-                        found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                        found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                     data_settings_cfgs, datasets_paths, 
                                                                                                                     chosen_resolution, solution_indeces_files, 
                                                                                                                     solution_indeces_times, chosen_datetimes_adjusted)
@@ -111,7 +113,7 @@ class Patcher:
                             found_files = True
 
                         else:
-                            found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                            found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                         data_settings_cfgs, datasets_paths, 
                                                                                                                         chosen_resolution, solution_indeces_files, 
                                                                                                                         solution_indeces_times, chosen_datetimes_adjusted)
@@ -126,7 +128,7 @@ class Patcher:
                 solution_indeces_times[current_index] = None
 
                 if current_index == 0:
-                    found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                    found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                     data_settings_cfgs, datasets_paths, 
                                                                                                                     chosen_resolution, solution_indeces_files, 
                                                                                                                     solution_indeces_times, chosen_datetimes_adjusted)
@@ -136,7 +138,7 @@ class Patcher:
                         found_files = True
 
                     else:
-                        found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, 
+                        found_files, solution_indeces_files, solution_indeces_times = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                     data_settings_cfgs, datasets_paths, 
                                                                                                                     chosen_resolution, solution_indeces_files, 
                                                                                                                     solution_indeces_times, chosen_datetimes_adjusted)                                     
@@ -196,6 +198,7 @@ class Patcher:
         datasets_datetimes = np.array(datasets_datetimes, dtype=list)
         datasets_date_resolutions = np.array(datasets_date_resolutions)
         datasets_date_resolution_vals = np.array(datasets_date_resolution_vals)
+        data_settings_cfgs = np.array(data_settings_cfgs)
 
         # Sort by how high each dataset's resolution is
         inds = datasets_date_resolution_vals.argsort()
@@ -203,6 +206,7 @@ class Patcher:
         datasets_datetimes = datasets_datetimes[inds]
         datasets_date_resolutions = datasets_date_resolutions[inds]
         datasets_date_resolution_vals = datasets_date_resolution_vals[inds]
+        data_settings_cfgs = data_settings_cfgs[inds]
 
         loop_number = n_patches // patches_per_time
         feature_patches = None
@@ -245,14 +249,14 @@ class Patcher:
 
                         for i, dataset_datetimes in enumerate(lowest_resolution_dates):
 
-                            dataset_datetimes = np.array(dataset_datetimes) #TODO: check if I have to specify datetime64 here?
-                            chosen_date_indeces[i] = np.where(dataset_datetimes == dataset_datetimes[-1][date_indeces[date_counter]])[0]
+                            dataset_datetimes = np.array(dataset_datetimes)
+                            chosen_date_indeces[i] = np.where(dataset_datetimes == lowest_resolution_dates[-1][date_indeces[date_counter]])[0]
 
                         date_counter = date_counter + 1
                         if np.all([len(i) != 0 for i in chosen_date_indeces]):
                             load_new_files = False
-                            solution_indeces_files = np.zeros(len(chosen_date_indeces))
-                            solution_indeces_times = np.zeros(len(chosen_date_indeces))
+                            solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int8)
+                            solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int8)
 
                     if date_counter == len(date_indeces) and load_new_files:
                         break
@@ -674,7 +678,7 @@ class Patcher:
             if np.all(np.array(reg_bools)):
                 file_list.append(file)
 
-        # TODO: Make the program crash if file_list stays empty
+        # TODO: Make the program crash if file_list stays empty. (ALSO DO THIS IN THE TIME CHECKING FUNCTIONS TOO)
         file_list.sort()
         return file_list
 

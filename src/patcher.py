@@ -761,6 +761,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='NetCDF Patch Generator')
     parser.add_argument('--run_num', type=int, help='Number to label this run')
     parser.add_argument('--config_path', type=str, help='Path to config file')
+    args = parser.parse_args()
     # # TODO: The array in the argument below is TEMP
     # args = parser.parse_args(["--run_num", "1", "--config_path", "/Users/tschmidt/repos/hail/configs/patcher.cfg"])
 

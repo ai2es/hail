@@ -85,21 +85,25 @@ class Patcher:
                                          solution_indeces_files=None, solution_indeces_times=None, chosen_datetimes_adjusted=None, all_found_datetimes_adjusted = None):
         found_files = False
         if solution_indeces_files is None:
-            solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int8)
+            solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int64)
         if solution_indeces_times is None:
-            solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int8)
+            solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int64)
         if chosen_datetimes_adjusted is None:
             chosen_datetimes_adjusted = []
             for i in range(len(chosen_date_indeces)):
                 chosen_datetimes_adjusted.append(None)
+        # TODO: Double check that the setup done below is correct (AND THAT LOGIC IN LOOP WHERE THIS FUNCTION IS CALLED IS CORRECT)
         if all_found_datetimes_adjusted is None:
             all_found_datetimes_adjusted = []
-            for i in range(len(chosen_date_indeces)):
-                all_found_datetimes_adjusted.append(None)
+            for i in range(len(datasets_paths)):
+                all_found_datetimes_adjusted_cols = []
+                all_found_datetimes_adjusted.append(all_found_datetimes_adjusted_cols)
+                for j in range(len(datasets_paths[i])):
+                    all_found_datetimes_adjusted[i].append(None)
 
         for i in range(solution_indeces_files[current_index], len(chosen_date_indeces[current_index])):
             if data_settings_cfgs[current_index]["Data"]["has_time_cord"]:
-                if all_found_datetimes_adjusted[current_index] is None:
+                if all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]] is None:
                     time_cord_name = data_settings_cfgs[current_index]["Data"]["time_cord_name"]
                     ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
                     # TODO: This is perhaps an extra loop. Consider if this can be removed later.
@@ -107,10 +111,10 @@ class Patcher:
                     for current_datetime in ds[time_cord_name].to_numpy():
                         datetimes_adjusted.append(current_datetime.astype(chosen_resolution))
 
-                    all_found_datetimes_adjusted[current_index] = datetimes_adjusted
+                    all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]] = datetimes_adjusted
 
-                for j in range(solution_indeces_times[current_index], len(all_found_datetimes_adjusted[current_index])):
-                    current_datetime = all_found_datetimes_adjusted[current_index][j]
+                for j in range(solution_indeces_times[current_index], len(all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]])):
+                    current_datetime = all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]][j]
                     chosen_datetimes_adjusted[current_index] = current_datetime
 
                     if current_index == 0:
@@ -192,12 +196,12 @@ class Patcher:
                                               data_settings_cfg["Path"]["path_reg"])
 
             dateset_datetimes, dataset_date_resolution, dataset_date_resolution_val = self.extract_best_datetime_no_IO(data_settings_cfg["Path"]["root_dir"],
-                                                                                      file_list, data_settings_cfg["Path"]["dt_positions"],
-                                                                                      data_settings_cfg["Path"]["dt_regs"],
-                                                                                      data_settings_cfg["Path"]["dt_formats"])
+                                                                                                                       file_list, data_settings_cfg["Path"]["dt_positions"],
+                                                                                                                       data_settings_cfg["Path"]["dt_regs"],
+                                                                                                                       data_settings_cfg["Path"]["dt_formats"])
 
-            file_list = self.select_data_range(file_list, data_settings_cfg["Bounds"]["data_start"], data_settings_cfg["Bounds"]["data_end"],
-                                               data_settings_cfg["Bounds"]["use_date_for_data_range"], dateset_datetimes, dataset_date_resolution)
+            file_list, dateset_datetimes = self.select_data_range(file_list, data_settings_cfg["Bounds"]["data_start"], data_settings_cfg["Bounds"]["data_end"],
+                                                                  data_settings_cfg["Bounds"]["use_date_for_data_range"], dateset_datetimes, dataset_date_resolution)
 
             datasets_paths.append(file_list)
             datasets_datetimes.append(dateset_datetimes)
@@ -236,6 +240,7 @@ class Patcher:
                 datetimes_adjusted.append(dataset_datetime.astype(datasets_date_resolutions[0]))
             lowest_resolution_dates.append(datetimes_adjusted)
 
+        all_found_datetimes_adjusted = None
         chosen_date_indeces = []
         for i in range(len(datasets_paths)):
             chosen_date_indeces.append([])
@@ -245,6 +250,9 @@ class Patcher:
         solution_indeces_files = None
         solution_indeces_times = None
         found_files = False
+
+        #TODO: Make a bunch of checks here that will throw full exceptions if stuff missing that is needed for the main loop.
+        # For example check if the dataset(s) are all empty
 
         # Setup solution_indeces_files and solution_indeces_times for case where we only are loading one dataset
         if len(chosen_date_indeces) == 1:
@@ -266,8 +274,8 @@ class Patcher:
                         date_counter = date_counter + 1
                         if np.all([len(i) != 0 for i in chosen_date_indeces]):
                             load_new_files = False
-                            solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int8)
-                            solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int8)
+                            solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int64)
+                            solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int64)
 
                     if date_counter == len(date_indeces) and load_new_files:
                         break
@@ -275,7 +283,8 @@ class Patcher:
                     found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(0,chosen_date_indeces, datasets_datetimes,
                                                                                                                                                 data_settings_cfgs,datasets_paths,chosen_resolution,
                                                                                                                                                 solution_indeces_files=solution_indeces_files,
-                                                                                                                                                solution_indeces_times=solution_indeces_times)
+                                                                                                                                                solution_indeces_times=solution_indeces_times, 
+                                                                                                                                                all_found_datetimes_adjusted=all_found_datetimes_adjusted)
 
                     if not found_files:
                         load_new_files = True
@@ -287,6 +296,10 @@ class Patcher:
                 found_files = False
 
             else:
+                if date_counter == len(date_indeces):
+                    warnings.warn('WARNING: Ran out of files with matching datetimes. Number of completed patches may be less than expected. Please consider adjusting "patches_per_unit_time"')
+                    break
+
                 solution_indeces_files = [date_indeces[date_counter]]
                 solution_indeces_times = [None]
                 if data_settings_cfgs[0]["Data"]["has_time_cord"]:
@@ -299,11 +312,21 @@ class Patcher:
 
                     solution_indeces_times = [time_indeces[time_counter]]
 
+                    time_counter = time_counter + 1
+                    if time_counter == len(time_indeces):
+                        time_counter = 0
+                        date_counter = date_counter + 1
+                else:
+                    date_counter = date_counter + 1
+
             loaded_datasets = []
             reproj_ds = None
             reproj_ds_index = 0
             for i, (file_index, time_index) in enumerate(zip(solution_indeces_files, solution_indeces_times)):
-                ds = xr.open_dataset(datasets_paths[i][file_index])
+                if len(chosen_date_indeces) == 1:
+                    ds = xr.open_dataset(datasets_paths[i][file_index])
+                else:
+                    ds = xr.open_dataset(datasets_paths[i][chosen_date_indeces[i][file_index]])
                 if data_settings_cfgs[i]["Data"]["has_time_cord"]:
                     time_dim_name = data_settings_cfgs[i]["Data"]["time_dim_name"]
                     ds = ds[{time_dim_name: time_index}]
@@ -409,12 +432,14 @@ class Patcher:
                 if len(single_dataset_patches) != 0:
                     all_patches.append(single_dataset_patches)
 
-                for single_dataset_patches in all_patches:
-                    for j, patch in enumerate(single_dataset_patches):
-                        if data_settings_cfgs[j]["Data"]["is_label_data"]:
-                            label_patches = self._concat_patches(label_patches, patch)
-                        else:
-                            feature_patches = self._concat_patches(feature_patches, patch)
+            # TODO: MAJOR: THIS IS MISSING FUNCTIONALITY. Needs to concat patches that fall under the same category (label or feature) from differnt datasets along the list of variables
+            # rather than just n_samples. Right now it will only concat things across n_samples which is really broken.
+            for single_dataset_patches in all_patches:
+                for j, patch in enumerate(single_dataset_patches):
+                    if data_settings_cfgs[j]["Data"]["is_label_data"]:
+                        label_patches = self._concat_patches(label_patches, patch)
+                    else:
+                        feature_patches = self._concat_patches(feature_patches, patch)
             
         if feature_patches is not None:
             feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
@@ -468,6 +493,13 @@ class Patcher:
     #     return feature_files, label_files
 
 
+    # NOTE: Assumes np_array is array (NOT LIST) of np.datetime64 objects (NOT datetime.date objects)
+    def _convert_datetime64_array_to_list(self, np_array):
+        new_list = []
+        for np_datetime in np_array:
+            new_list.append(np_datetime)
+        return new_list
+
     # Three possible options:
     # 1. use dates to set range
     # 2. use hard indeces to set range
@@ -477,6 +509,8 @@ class Patcher:
     def select_data_range(self, file_list, data_start, data_end, use_date=False, dates_list=None, dataset_date_resolution=None):
         file_list = np.array(file_list)
 
+        # If date is used for selecting files, this assumes that the dates are included and are not None TODO: Make error check for this?
+        # (Just throw exception inside if statement below that checks if dates_list is none)
         if use_date:
             if data_start is not None:
                 start_date = np.datetime64(data_start).astype(dataset_date_resolution)
@@ -484,13 +518,19 @@ class Patcher:
                 end_date = np.datetime64(data_end).astype(dataset_date_resolution)
 
             if data_start is not None and data_end is not None:
-                return file_list[np.where(np.logical_and(dates_list >= start_date, dates_list <= end_date))].tolist()
+                inds = np.where(np.logical_and(dates_list >= start_date, dates_list <= end_date))
+                dates_list = np.array(dates_list)
+                return file_list[inds].tolist(), self._convert_datetime64_array_to_list(dates_list[inds])
             elif data_start is None and data_end is not None:
-                return file_list[np.where(dates_list <= end_date)].tolist()
+                inds = np.where(dates_list <= end_date)
+                dates_list = np.array(dates_list)
+                return file_list[inds].tolist(), self._convert_datetime64_array_to_list(dates_list[inds])
             elif data_start is not None and data_end is None:
-                return file_list[np.where(dates_list >= start_date)].tolist()
+                inds = np.where(dates_list >= start_date)
+                dates_list = np.array(dates_list)
+                return file_list[inds].tolist(), self._convert_datetime64_array_to_list(dates_list[inds])
             else:
-                return file_list.tolist()
+                return file_list.tolist(), dates_list
         
         else:
             start_index = 0
@@ -508,7 +548,11 @@ class Patcher:
                 elif isinstance(data_end, float):
                     end_index = int(data_end*len(file_list))
         
-            return file_list[start_index:end_index].tolist()
+            if dates_list is not None:
+                dates_list = np.array(dates_list)
+                dates_list = self._convert_datetime64_array_to_list(dates_list[start_index:end_index])
+
+            return file_list[start_index:end_index].tolist(), dates_list
                 
 
     # def _find_label_path(self, feature_file):

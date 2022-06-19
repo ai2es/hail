@@ -102,7 +102,7 @@ class Patcher:
                     all_found_datetimes_adjusted[i].append(None)
 
         for i in range(solution_indeces_files[current_index], len(chosen_date_indeces[current_index])):
-            if data_settings_cfgs[current_index]["Data"]["has_time_cord"]:
+            if data_settings_cfgs[current_index]["Data"]["use_internal_times_when_finding_files"]:
                 if all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]] is None:
                     time_cord_name = data_settings_cfgs[current_index]["Data"]["time_cord_name"]
                     ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
@@ -140,13 +140,21 @@ class Patcher:
             else:
                 current_datetime = all_datetimes[current_index][chosen_date_indeces[current_index][i]].astype(chosen_resolution)
                 chosen_datetimes_adjusted[current_index] = current_datetime
-                solution_indeces_times[current_index] = None
 
                 if current_index == 0:
                     found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                                                 data_settings_cfgs, datasets_paths, 
                                                                                                                                                 chosen_resolution, solution_indeces_files, 
                                                                                                                                                 solution_indeces_times, chosen_datetimes_adjusted, all_found_datetimes_adjusted)
+                    if found_files and data_settings_cfgs[current_index]["Data"]["has_time_cord"]:
+                        ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
+                        time_cord_name = data_settings_cfgs[current_index]["Data"]["time_cord_name"]
+                        for j, current_datetime in enumerate(ds[time_cord_name].to_numpy()):
+                            if current_datetime.astype(chosen_resolution) == chosen_datetimes_adjusted[current_index+1]:
+                                solution_indeces_times[current_index] = j
+                                break
+                            if j == len(ds[time_cord_name].to_numpy())-1:
+                                raise Exception('Selected "False" for "use_internal_times_when_finding_files" along with "True" for "has_time_cord" for one or more of the given datasets however at least one file with time in it was not temporally compatible with the rest. Perhaps it was mislabeled?')
 
                 elif chosen_datetimes_adjusted[current_index-1] == current_datetime:
                     if current_index == len(chosen_date_indeces)-1:
@@ -156,7 +164,16 @@ class Patcher:
                         found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                                                     data_settings_cfgs, datasets_paths, 
                                                                                                                                                     chosen_resolution, solution_indeces_files, 
-                                                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted, all_found_datetimes_adjusted)                                     
+                                                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted, all_found_datetimes_adjusted) 
+                    if found_files and data_settings_cfgs[current_index]["Data"]["has_time_cord"]:
+                        ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
+                        time_cord_name = data_settings_cfgs[current_index]["Data"]["time_cord_name"]
+                        for j, current_datetime in enumerate(ds[time_cord_name].to_numpy()):
+                            if current_datetime.astype(chosen_resolution) == chosen_datetimes_adjusted[current_index-1]:
+                                solution_indeces_times[current_index] = j
+                                break
+                            if j == len(ds[time_cord_name].to_numpy())-1:
+                                raise Exception('Selected "False" for "use_internal_times_when_finding_files" along with "True" for "has_time_cord" for one or more of the given datasets however at least one file with time in it was not temporally compatible with the rest. Perhaps it was mislabeled?')                                     
 
             if found_files:
                 solution_indeces_files[current_index] = i
@@ -301,7 +318,7 @@ class Patcher:
                     break
 
                 solution_indeces_files = [date_indeces[date_counter]]
-                solution_indeces_times = [None]
+                solution_indeces_times = [0]
                 if data_settings_cfgs[0]["Data"]["has_time_cord"]:
                     if time_counter == 0:
                         ds = xr.open_dataset(datasets_paths[0][date_indeces[date_counter]])

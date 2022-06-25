@@ -78,7 +78,6 @@ class Patcher:
 
 
     # TODO: MAJOR: Make sure this randomizes time order so it doesn't always return first time first
-    # TODO: Check to see if I need to close xarray datasets for memory issues
     # NOTE: Only works in multi-dateset case. Not to be used for 1 dataset case.
     def _compare_datetimes_with_IO(self, current_index, chosen_date_indeces, all_datetimes,
                                          data_settings_cfgs, datasets_paths, chosen_resolution, 
@@ -112,6 +111,7 @@ class Patcher:
                         datetimes_adjusted.append(current_datetime.astype(chosen_resolution))
 
                     all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]] = datetimes_adjusted
+                    ds.close()
 
                 for j in range(solution_indeces_times[current_index], len(all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]])):
                     current_datetime = all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]][j]
@@ -155,6 +155,7 @@ class Patcher:
                                 break
                             if j == len(ds[time_cord_name].to_numpy())-1:
                                 raise Exception('Selected "False" for "use_internal_times_when_finding_files" along with "True" for "has_time_cord" for one or more of the given datasets however at least one file with time in it was not temporally compatible with the rest. Perhaps it was mislabeled?')
+                        ds.close()
 
                 elif chosen_datetimes_adjusted[current_index-1] == current_datetime:
                     if current_index == len(chosen_date_indeces)-1:
@@ -174,6 +175,7 @@ class Patcher:
                                 break
                             if j == len(ds[time_cord_name].to_numpy())-1:
                                 raise Exception('Selected "False" for "use_internal_times_when_finding_files" along with "True" for "has_time_cord" for one or more of the given datasets however at least one file with time in it was not temporally compatible with the rest. Perhaps it was mislabeled?')                                     
+                        ds.close()
 
             if found_files:
                 solution_indeces_files[current_index] = i
@@ -324,6 +326,7 @@ class Patcher:
                         ds = xr.open_dataset(datasets_paths[0][date_indeces[date_counter]])
                         time_cord_name = data_settings_cfgs[0]["Data"]["time_cord_name"]
                         current_datetime = ds[time_cord_name]
+                        ds.close()
 
                         time_indeces = np.random.choice(np.arange(0,len(current_datetime)), size=len(current_datetime), replace=False)
 
@@ -410,6 +413,7 @@ class Patcher:
                         possible_y_indeces_for_patches = possible_pixels[1]
 
                 reproj_datasets.append(ds_reproj)
+                ds.close()
 
             if dataset_empty_or_out_of_range:
                 warnings.warn('WARNING: At least one of the selected dataset files contained data that was entirely missing or data that did not spatially aligned with the other data. Had to skip and total number of patches may now be less than expected.')
@@ -448,6 +452,9 @@ class Patcher:
                 
                 if len(single_dataset_patches) != 0:
                     all_patches.append(single_dataset_patches)
+
+            for ds in reproj_datasets:
+                ds.close()
 
             # TODO: MAJOR: THIS IS MISSING FUNCTIONALITY. Needs to concat patches that fall under the same category (label or feature) from differnt datasets along the list of variables
             # rather than just n_samples. Right now it will only concat things across n_samples which is really broken.

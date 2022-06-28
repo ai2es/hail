@@ -197,6 +197,10 @@ class Patcher:
         n_patches = settings_dict["Patches"]["number_of_patches"]
         patches_per_time = settings_dict["Patches"]["patches_per_unit_time"]
         chosen_resolution = settings_dict["Patches"]["chosen_resolution"]
+        if settings_dict["Patches"]["max_times_num_per_file"] is None: # NOTE: This is for the number of specific times alowed to be extraced from one set of files. NOT NUMBER OF PATCHES ALLOWED PER FILE
+            max_times_num_per_file = np.inf
+        else:
+            max_times_num_per_file = settings_dict["Patches"]["max_times_num_per_file"]
 
         data_settings_cfgs = []
         for data_settings_cfg in settings_dict["Input_Data"]["input_cfg_list"]:
@@ -242,14 +246,6 @@ class Patcher:
         datasets_date_resolution_vals = datasets_date_resolution_vals[inds]
         data_settings_cfgs = data_settings_cfgs[inds]
 
-        loop_number = n_patches // patches_per_time
-        feature_patches = None
-        label_patches = None
-        date_indeces = np.random.choice(np.arange(0,len(datasets_paths[-1])), size=len(datasets_paths[-1]), replace=False)
-        date_counter = 0
-        time_counter = 0
-        time_indeces = None # Used if single dataset case with time. (for shuffling data)
-
         # Have numpy datetime64 objects with dates adjusted for the lowest resolution we have ready for all datasets
         # TODO: Double check this idea by considering it once more
         lowest_resolution_dates = []
@@ -260,201 +256,68 @@ class Patcher:
             lowest_resolution_dates.append(datetimes_adjusted)
 
         all_found_datetimes_adjusted = None
+        
+        # Main high level variables that govern the flow of patching.
+        load_new_files = True
+        found_files = False
+        solution_indeces_files = None
+        solution_indeces_times = None
+        date_indeces = np.random.choice(np.arange(0,len(datasets_paths[-1])), size=len(datasets_paths[-1]), replace=False)
+        time_indeces = None
         chosen_date_indeces = []
         for i in range(len(datasets_paths)):
             chosen_date_indeces.append([])
-
-        # Main high level variables that govern the flow of patching.
-        load_new_files = True
-        solution_indeces_files = None
-        solution_indeces_times = None
-        found_files = False
-
-        #TODO: Make a bunch of checks here that will throw full exceptions if stuff missing that is needed for the main loop.
-        # For example check if the dataset(s) are all empty
-
+        date_counter = 0
+        data_per_file_counter = 0
         # Setup solution_indeces_files and solution_indeces_times for case where we only are loading one dataset
         if len(chosen_date_indeces) == 1:
             solution_indeces_files = date_indeces
+        
+        #TODO: Make a bunch of checks here that will throw full exceptions if stuff missing that is needed for the main loop.
+        # For example check if the dataset(s) are all empty
+
+        loop_number = n_patches // patches_per_time
+        feature_patches = None
+        label_patches = None
 
         for n in tqdm(np.arange(0,loop_number)):
+            counters_dict = {"date_counter": date_counter,
+                             "data_per_file_counter": data_per_file_counter}
+            flags_dict = {"load_new_files": load_new_files,
+                          "found_files": found_files}
+            index_dict = {"solution_indeces_files": solution_indeces_files,
+                          "solution_indeces_times": solution_indeces_times,
+                          "date_indeces": date_indeces,
+                          "time_indeces": time_indeces,
+                          "chosen_date_indeces": chosen_date_indeces}
 
-            if len(chosen_date_indeces) != 1:
+            ran_out_of_files, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted = self._find_indeces_of_matching_datasets(index_dict, flags_dict, 
+                                                                                              counters_dict, lowest_resolution_dates, all_found_datetimes_adjusted,
+                                                                                              datasets_datetimes, data_settings_cfgs, datasets_paths, chosen_resolution, max_times_num_per_file)
 
-                while not found_files:
+            if ran_out_of_files:
+                warnings.warn('WARNING: Ran out of files with matching datetimes. Number of completed patches may be less than expected. Please consider adjusting "patches_per_unit_time"')
+                break
 
-                    while date_counter < len(date_indeces) and load_new_files:
+            chosen_date_indeces = index_dict["chosen_date_indeces"]
+            date_indeces = index_dict["date_indeces"]
+            time_indeces = index_dict["time_indeces"]
+            solution_indeces_files = index_dict["solution_indeces_files"]
+            solution_indeces_times = index_dict["solution_indeces_times"]
+            load_new_files = flags_dict["load_new_files"]
+            found_files = flags_dict["found_files"]
+            date_counter = counters_dict["date_counter"]
+            data_per_file_counter = counters_dict["data_per_file_counter"]
 
-                        for i, dataset_datetimes in enumerate(lowest_resolution_dates):
+            loaded_datasets, reproj_ds_index = self._load_datasets_from_disk(chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs)
 
-                            dataset_datetimes = np.array(dataset_datetimes)
-                            chosen_date_indeces[i] = np.where(dataset_datetimes == lowest_resolution_dates[-1][date_indeces[date_counter]])[0]
-
-                        date_counter = date_counter + 1
-                        if np.all([len(i) != 0 for i in chosen_date_indeces]):
-                            load_new_files = False
-                            solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int64)
-                            solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int64)
-
-                    if date_counter == len(date_indeces) and load_new_files:
-                        break
-
-                    found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(0,chosen_date_indeces, datasets_datetimes,
-                                                                                                                                                data_settings_cfgs,datasets_paths,chosen_resolution,
-                                                                                                                                                solution_indeces_files=solution_indeces_files,
-                                                                                                                                                solution_indeces_times=solution_indeces_times, 
-                                                                                                                                                all_found_datetimes_adjusted=all_found_datetimes_adjusted)
-
-                    if not found_files:
-                        load_new_files = True
-
-                if date_counter == len(date_indeces) and load_new_files:
-                    warnings.warn('WARNING: Ran out of files with matching datetimes. Number of completed patches may be less than expected. Please consider adjusting "patches_per_unit_time"')
-                    break
-
-                found_files = False
-
-            else:
-                if date_counter == len(date_indeces):
-                    warnings.warn('WARNING: Ran out of files with matching datetimes. Number of completed patches may be less than expected. Please consider adjusting "patches_per_unit_time"')
-                    break
-
-                solution_indeces_files = [date_indeces[date_counter]]
-                solution_indeces_times = [0]
-                if data_settings_cfgs[0]["Data"]["has_time_cord"]:
-                    if time_counter == 0:
-                        ds = xr.open_dataset(datasets_paths[0][date_indeces[date_counter]])
-                        time_cord_name = data_settings_cfgs[0]["Data"]["time_cord_name"]
-                        current_datetime = ds[time_cord_name]
-                        ds.close()
-
-                        time_indeces = np.random.choice(np.arange(0,len(current_datetime)), size=len(current_datetime), replace=False)
-
-                    solution_indeces_times = [time_indeces[time_counter]]
-
-                    time_counter = time_counter + 1
-                    if time_counter == len(time_indeces):
-                        time_counter = 0
-                        date_counter = date_counter + 1
-                else:
-                    date_counter = date_counter + 1
-
-            loaded_datasets = []
-            reproj_ds = None
-            reproj_ds_index = 0
-            for i, (file_index, time_index) in enumerate(zip(solution_indeces_files, solution_indeces_times)):
-                if len(chosen_date_indeces) == 1:
-                    ds = xr.open_dataset(datasets_paths[i][file_index])
-                else:
-                    ds = xr.open_dataset(datasets_paths[i][chosen_date_indeces[i][file_index]])
-                if data_settings_cfgs[i]["Data"]["has_time_cord"]:
-                    time_dim_name = data_settings_cfgs[i]["Data"]["time_dim_name"]
-                    ds = ds[{time_dim_name: time_index}]
-
-                # Select only the data we want
-                ds = ds[data_settings_cfgs[i]["Data"]["selected_vars"]]
-
-                lons = ds[data_settings_cfgs[i]["Data"]["lon_cord_name"]].to_numpy()
-                lats = ds[data_settings_cfgs[i]["Data"]["lat_cord_name"]].to_numpy()
-
-                if len(lons.shape) == 1:
-                    lons, lats = np.meshgrid(lons, lats)
-                elif len(lons.shape) == 2:
-                    pass
-                else:
-                    raise Exception("At least one dataset has lat/lons with either too few or too many dimensions. lat/lons must be either 2d or 1d.")
-
-                # TODO: Look into case where lon/lat coord already exist
-                ds = ds.assign_coords(lon=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lons))
-                ds = ds.assign_coords(lat=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lats))
-
-                if data_settings_cfgs[i]["Data"]["reproj_target"]:
-                    reproj_ds = ds
-                    reproj_ds_index = i
-
-                loaded_datasets.append(ds)
-
-            if reproj_ds is None:
-                raise Exception("No dataset has been designated as the reproj_target. You must designate exactly one as this. Even if only loading one dataset.")
-
-            # Increment index system for loop around
-            if data_settings_cfgs[-1]["Data"]["has_time_cord"]:
-                solution_indeces_times[-1] = solution_indeces_times[-1] + 1
-            else:
-                solution_indeces_files[-1] = solution_indeces_files[-1] + 1
-
-            # TODO: Maybe make the feature_datasets and label_datasets here instead?
-            reproj_datasets = []
-            possible_x_indeces_for_patches = None
-            possible_y_indeces_for_patches = None
-            smallest_indeces_list_len = np.inf
-            dataset_empty_or_out_of_range = False
-            for ds in loaded_datasets:
-                # TODO: Maybe make the regridder algorithm a config setting?
-                # TODO: Consider if reuse_weights:bool is useful here
-                regridder = xe.Regridder(ds, reproj_ds, "bilinear", unmapped_to_nan=True)
-                ds_reproj = regridder(ds)
-                for key_name in ds_reproj.keys():
-                    data_var = ds_reproj[key_name].to_numpy()
-                    if np.isnan(data_var).all():
-                        dataset_empty_or_out_of_range = True
-                        break
-
-                if dataset_empty_or_out_of_range:
-                    break
-
-                # ds_reproj = ds_reproj.where(np.logical_not(np.isnan(ds_reproj)), drop=True)
-                for key_name in ds_reproj.keys():
-                    data_var = ds_reproj[key_name].to_numpy()
-                    possible_pixels = np.where(np.logical_not(np.isnan(data_var)))
-                    if len(possible_pixels[0]) < smallest_indeces_list_len:
-                        smallest_indeces_list_len = len(possible_pixels[0])
-                        possible_x_indeces_for_patches = possible_pixels[0]
-                        possible_y_indeces_for_patches = possible_pixels[1]
-
-                reproj_datasets.append(ds_reproj)
-                ds.close()
+            reproj_datasets, dataset_empty_or_out_of_range = self._reproject_datasets(loaded_datasets, reproj_ds_index)
 
             if dataset_empty_or_out_of_range:
                 warnings.warn('WARNING: At least one of the selected dataset files contained data that was entirely missing or data that did not spatially aligned with the other data. Had to skip and total number of patches may now be less than expected.')
                 continue
 
-            pixel_counter = 0
-            pixel_indeces = np.random.choice(np.arange(0,len(possible_x_indeces_for_patches)), size=len(possible_x_indeces_for_patches), replace=False)
-            x_max = reproj_ds.dims[data_settings_cfgs[reproj_ds_index]["Data"]["x_dim_name"]]
-            y_max = reproj_ds.dims[data_settings_cfgs[reproj_ds_index]["Data"]["y_dim_name"]]
-            all_patches = []
-            grid_size = [x_max, y_max]
-            for i in range(patches_per_time):
-                has_nans_in_patch = True
-                while has_nans_in_patch and pixel_counter < len(pixel_indeces):
-                    has_nans_in_patch = False
-                    x_i = possible_x_indeces_for_patches[pixel_indeces[pixel_counter]]
-                    y_i = possible_y_indeces_for_patches[pixel_indeces[pixel_counter]]
-                    single_dataset_patches = []
-                    for ds in reproj_datasets:
-                        patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i, data_settings_cfgs[reproj_ds_index]["Data"]["x_dim_name"], data_settings_cfgs[reproj_ds_index]["Data"]["y_dim_name"])
-                        if patch is None:
-                            has_nans_in_patch = True
-                            single_dataset_patches = []
-                            break
-                        for key_name in patch.keys():
-                            data_var = patch[key_name].to_numpy()
-                            if np.isnan(data_var).any():
-                                has_nans_in_patch = True
-                        if has_nans_in_patch:
-                            single_dataset_patches = []
-                            break
-                        single_dataset_patches.append(patch)
-                    pixel_counter = pixel_counter + 1
-
-                    # TODO Make warning in above while loop (or somwhere after) warning that we ran out of pixels. Make similar to other while loop warning.
-                
-                if len(single_dataset_patches) != 0:
-                    all_patches.append(single_dataset_patches)
-
-            for ds in reproj_datasets:
-                ds.close()
+            all_patches = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index)
 
             # TODO: MAJOR: THIS IS MISSING FUNCTIONALITY. Needs to concat patches that fall under the same category (label or feature) from differnt datasets along the list of variables
             # rather than just n_samples. Right now it will only concat things across n_samples which is really broken.
@@ -464,6 +327,14 @@ class Patcher:
                         label_patches = self._concat_patches(label_patches, patch)
                     else:
                         feature_patches = self._concat_patches(feature_patches, patch)
+
+            # Increment index system for loop around (only relevant for multi-dataset case)
+            if data_settings_cfgs[-1]["Data"]["use_internal_times_when_finding_files"]:
+                solution_indeces_times[-1] = solution_indeces_times[-1] + 1
+            else:
+                solution_indeces_files[-1] = solution_indeces_files[-1] + 1
+            if data_per_file_counter == max_times_num_per_file:
+                    load_new_files = True
             
         if feature_patches is not None:
             feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
@@ -472,6 +343,217 @@ class Patcher:
         if label_patches is not None:
             label_patch_path = os.path.join(label_patches_root, str(self.run_num) + ".nc")
             label_patches.to_netcdf(label_patch_path)
+
+
+    def _find_indeces_of_matching_datasets(self, index_dict, flags_dict, counters_dict, lowest_resolution_dates, all_found_datetimes_adjusted,
+                                           datasets_datetimes, data_settings_cfgs, datasets_paths, chosen_resolution, max_times_num_per_file):
+        # TODO: Turn the packing and unpacking of these dicts into methods (including outside this method)
+        chosen_date_indeces = index_dict["chosen_date_indeces"]
+        date_indeces = index_dict["date_indeces"]
+        time_indeces = index_dict["time_indeces"]
+        solution_indeces_files = index_dict["solution_indeces_files"]
+        solution_indeces_times = index_dict["solution_indeces_times"]
+        load_new_files = flags_dict["load_new_files"]
+        found_files = flags_dict["found_files"]
+        date_counter = counters_dict["date_counter"]
+        data_per_file_counter = counters_dict["data_per_file_counter"]
+
+        if len(chosen_date_indeces) != 1:
+
+            while not found_files:
+
+                while date_counter < len(date_indeces) and load_new_files:
+                    data_per_file_counter = 0
+
+                    for i, dataset_datetimes in enumerate(lowest_resolution_dates):
+
+                        dataset_datetimes = np.array(dataset_datetimes)
+                        chosen_date_indeces[i] = np.where(dataset_datetimes == lowest_resolution_dates[-1][date_indeces[date_counter]])[0]
+
+                    date_counter = date_counter + 1
+                    if np.all([len(i) != 0 for i in chosen_date_indeces]):
+                        load_new_files = False
+                        solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int64)
+                        solution_indeces_times = np.zeros(len(chosen_date_indeces), dtype=np.int64)
+
+                if date_counter == len(date_indeces) and load_new_files:
+                    break
+
+                found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(0,chosen_date_indeces, datasets_datetimes,
+                                                                                                                                            data_settings_cfgs,datasets_paths,chosen_resolution,
+                                                                                                                                            solution_indeces_files=solution_indeces_files,
+                                                                                                                                            solution_indeces_times=solution_indeces_times, 
+                                                                                                                                            all_found_datetimes_adjusted=all_found_datetimes_adjusted)
+
+                if not found_files:
+                    load_new_files = True
+                else:
+                    data_per_file_counter = data_per_file_counter + 1
+
+            if date_counter == len(date_indeces) and load_new_files:
+                return True, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted
+
+            found_files = False
+
+        else:
+            if date_counter == len(date_indeces):
+                return True, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted
+
+            solution_indeces_files = [date_indeces[date_counter]]
+            solution_indeces_times = [0]
+            if data_settings_cfgs[0]["Data"]["has_time_cord"]:
+                if data_per_file_counter == 0:
+                    ds = xr.open_dataset(datasets_paths[0][date_indeces[date_counter]])
+                    time_cord_name = data_settings_cfgs[0]["Data"]["time_cord_name"]
+                    current_datetime = ds[time_cord_name]
+                    ds.close()
+
+                    time_indeces = np.random.choice(np.arange(0,len(current_datetime)), size=len(current_datetime), replace=False)
+
+                solution_indeces_times = [time_indeces[data_per_file_counter]]
+
+                data_per_file_counter = data_per_file_counter + 1
+                if data_per_file_counter == len(time_indeces) or data_per_file_counter == max_times_num_per_file:
+                    data_per_file_counter = 0
+                    date_counter = date_counter + 1
+            else:
+                date_counter = date_counter + 1
+
+        index_dict["chosen_date_indeces"] = chosen_date_indeces
+        index_dict["date_indeces"] = date_indeces
+        index_dict["time_indeces"] = time_indeces
+        index_dict["solution_indeces_files"] = solution_indeces_files
+        index_dict["solution_indeces_times"] = solution_indeces_times
+        flags_dict["load_new_files"] = load_new_files
+        flags_dict["found_files"] = found_files
+        counters_dict["date_counter"] = date_counter
+        counters_dict["data_per_file_counter"] = data_per_file_counter
+
+        return False, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted
+
+    
+    def _load_datasets_from_disk(self, chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs):
+        loaded_datasets = []
+        reproj_ds_index = -1
+        for i, (file_index, time_index) in enumerate(zip(solution_indeces_files, solution_indeces_times)):
+            if len(chosen_date_indeces) == 1:
+                ds = xr.open_dataset(datasets_paths[i][file_index])
+            else:
+                ds = xr.open_dataset(datasets_paths[i][chosen_date_indeces[i][file_index]])
+            if data_settings_cfgs[i]["Data"]["has_time_cord"]:
+                time_dim_name = data_settings_cfgs[i]["Data"]["time_dim_name"]
+                ds = ds[{time_dim_name: time_index}]
+
+            # Select only the data we want
+            ds = ds[data_settings_cfgs[i]["Data"]["selected_vars"]]
+
+            lons = ds[data_settings_cfgs[i]["Data"]["lon_cord_name"]].to_numpy()
+            lats = ds[data_settings_cfgs[i]["Data"]["lat_cord_name"]].to_numpy()
+
+            if len(lons.shape) == 1:
+                lons, lats = np.meshgrid(lons, lats)
+            elif len(lons.shape) == 2:
+                pass
+            else:
+                raise Exception("At least one dataset has lat/lons with either too few or too many dimensions. lat/lons must be either 2d or 1d.")
+
+            # TODO: Look into case where lon/lat coord already exist
+            ds = ds.assign_coords(lon=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lons))
+            ds = ds.assign_coords(lat=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lats))
+
+            if data_settings_cfgs[i]["Data"]["reproj_target"]:
+                reproj_ds_index = i
+
+            loaded_datasets.append(ds)
+
+        if reproj_ds_index == -1:
+            raise Exception("No dataset has been designated as the reproj_target. You must designate exactly one as this. Even if only loading one dataset.")
+
+        return loaded_datasets
+
+
+    def _reproject_datasets(self, loaded_datasets, reproj_ds_index):
+        reproj_datasets = []
+        dataset_empty_or_out_of_range = False
+        reproj_target_ds = copy.deepcopy(loaded_datasets[reproj_ds_index])
+
+        for ds in loaded_datasets:
+            # TODO: Maybe make the regridder algorithm a config setting?
+            # TODO: Consider if reuse_weights:bool is useful here
+            regridder = xe.Regridder(ds, reproj_target_ds, "bilinear", unmapped_to_nan=True)
+            ds_reproj = regridder(ds)
+            for key_name in ds_reproj.keys():
+                data_var = ds_reproj[key_name].to_numpy()
+                if np.isnan(data_var).all():
+                    dataset_empty_or_out_of_range = True
+                    break
+
+            if dataset_empty_or_out_of_range:
+                break
+
+            reproj_datasets.append(ds_reproj)
+            ds.close()
+        
+        reproj_target_ds.close()
+
+        return reproj_datasets, dataset_empty_or_out_of_range
+
+    
+    def _make_patches(self, reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index):
+        x_dim_name = data_settings_cfgs[reproj_ds_index]["Data"]["x_dim_name"]
+        y_dim_name = data_settings_cfgs[reproj_ds_index]["Data"]["y_dim_name"]
+        reproj_ds = reproj_datasets[reproj_ds_index]
+
+        possible_x_indeces_for_patches = None
+        possible_y_indeces_for_patches = None
+        smallest_indeces_list_len = np.inf
+        for ds in reproj_datasets:
+            for key_name in ds.keys():
+                data_var = ds[key_name].to_numpy()
+                possible_pixels = np.where(np.logical_not(np.isnan(data_var)))
+                if len(possible_pixels[0]) < smallest_indeces_list_len:
+                    smallest_indeces_list_len = len(possible_pixels[0])
+                    possible_x_indeces_for_patches = possible_pixels[0]
+                    possible_y_indeces_for_patches = possible_pixels[1]
+
+        pixel_counter = 0
+        pixel_indeces = np.random.choice(np.arange(0,len(possible_x_indeces_for_patches)), size=len(possible_x_indeces_for_patches), replace=False)
+        x_max = reproj_ds.dims[x_dim_name]
+        y_max = reproj_ds.dims[y_dim_name]
+        all_patches = []
+        grid_size = [x_max, y_max]
+        for i in range(patches_per_time):
+            has_nans_in_patch = True
+            while has_nans_in_patch and pixel_counter < len(pixel_indeces):
+                has_nans_in_patch = False
+                x_i = possible_x_indeces_for_patches[pixel_indeces[pixel_counter]]
+                y_i = possible_y_indeces_for_patches[pixel_indeces[pixel_counter]]
+                single_dataset_patches = []
+                for ds in reproj_datasets:
+                    patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i, x_dim_name, y_dim_name)
+                    if patch is None:
+                        has_nans_in_patch = True
+                        single_dataset_patches = []
+                        break
+                    for key_name in patch.keys():
+                        data_var = patch[key_name].to_numpy()
+                        if np.isnan(data_var).any():
+                            has_nans_in_patch = True
+                    if has_nans_in_patch:
+                        single_dataset_patches = []
+                        break
+                    single_dataset_patches.append(patch)
+                pixel_counter = pixel_counter + 1
+
+                # TODO Make warning in above while loop (or somwhere after) warning that we ran out of pixels. Make similar to other while loop warning.
+            
+            if len(single_dataset_patches) != 0:
+                all_patches.append(single_dataset_patches)
+
+        for ds in reproj_datasets:
+            ds.close()
+
+        return all_patches
 
     
     def _concat_patches(self, patches, patch):
@@ -492,7 +574,6 @@ class Patcher:
 
         if x >= halfstep and x < x_max and y >= halfstep and y < y_max:
             patch = file_ds[{x_dim_name:slice(x-halfstep,x+halfstep), y_dim_name:slice(y-halfstep,y+halfstep)}]
-            # patch = file_ds.isel(x=slice(x-halfstep,x+halfstep),y=slice(y-halfstep,y+halfstep))
 
         return patch
     

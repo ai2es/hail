@@ -576,26 +576,6 @@ class Patcher:
             patch = file_ds[{x_dim_name:slice(x-halfstep,x+halfstep), y_dim_name:slice(y-halfstep,y+halfstep)}]
 
         return patch
-    
-
-    # # Also removes any feature file that does not have a corresponding label
-    # def _get_label_files(self, feature_files):
-    #     feature_files_to_remove = []
-    #     label_files = []
-    #     for feature_file in feature_files:
-    #         label_file = self._find_label_path(feature_file)
-    #         if label_file is None:
-    #             feature_files_to_remove.append(feature_file)
-    #         else:
-    #             label_files.append(label_file)
-            
-    #     for file_to_remove in feature_files_to_remove:
-    #         feature_files.remove(file_to_remove)
-
-    #     if len(feature_files) != len(label_files):
-    #         raise Exception("Method _get_label_files has failed. Not all dud feature files removed.")
-
-    #     return feature_files, label_files
 
 
     # NOTE: Assumes np_array is array (NOT LIST) of np.datetime64 objects (NOT datetime.date objects)
@@ -658,69 +638,6 @@ class Patcher:
                 dates_list = self._convert_datetime64_array_to_list(dates_list[start_index:end_index])
 
             return file_list[start_index:end_index].tolist(), dates_list
-                
-
-    # def _find_label_path(self, feature_file):
-    #     feature_root = self.config["Input"]["examples_root"]
-    #     feature_glob = self.config["Input"]["examples_glob"]
-    #     feature_hour_regex = self.config["Input"]["examples_hour_regex"]
-    #     feature_minute_regex = self.config["Input"]["examples_minute_regex"]
-    #     labels_root = self.config["Input"]["labels_root"]
-    #     labels_glob = self.config["Input"]["labels_glob"]
-    #     labels_hour_regex = self.config["Input"]["labels_hour_regex"]
-    #     labels_minute_regex = self.config["Input"]["labels_minute_regex"]
-
-    #     glob_path = self._glob_path_maker(feature_root, feature_glob)
-    #     feature_path_date_index = self._date_dir_index_finder(glob_path)
-    #     feature_path_array = feature_file.split("/")
-    #     date = feature_path_array[feature_path_date_index]
-
-    #     glob_path = self._glob_path_maker(labels_root, labels_glob)
-    #     label_path_date_index = self._date_dir_index_finder(glob_path)
-    #     glob_path_array = glob_path.split("/")
-    #     glob_path_array[label_path_date_index] = date
-
-    #     feature_filename = os.path.split(feature_file)[-1]
-    #     feature_time = self._get_time_from_regex(feature_hour_regex, feature_minute_regex, feature_filename)
-
-    #     label_glob_with_date = "/".join(glob_path_array)
-    #     label_files = glob.glob(label_glob_with_date)
-
-    #     label_path = None
-    #     for label_file in label_files:
-    #         label_filename = os.path.split(label_file)[-1]
-    #         label_time = self._get_time_from_regex(labels_hour_regex, labels_minute_regex, label_filename)
-
-    #         if feature_time == label_time:
-    #             label_path = label_file
-    #             break
-
-    #     return label_path
-
-
-    # def _date_dir_index_finder(self, glob_path):
-    #     glob_path_array = np.array(glob_path.split("/"))
-    #     date_index = np.where(glob_path_array == "*")[0][0] # WAS date_index = np.where(glob_path_array == "*")[0][0]
-    #     return date_index
-
-
-    # NOTE: Hour MUST be in format of %H%H and minute MUST be in format of %M%M
-    # def _get_time_from_regex(self, hour_reg, min_reg, filename):
-    #     reg_hour = re.search(hour_reg, filename)
-    #     if not reg_hour:
-    #         raise IOError("A filename_hour_regex is not valid. Can't find hour.")
-    #     hour = reg_hour.group(1)
-
-    #     if min_reg is not None:
-    #         reg_min = re.search(min_reg, filename)
-    #         if not reg_min:
-    #             raise IOError("A filename_minute_regex is not valid. Can't find minute.")
-    #         min = reg_min.group(1)
-    #     else:
-    #         min = "00"
-        
-    #     time = hour + min
-    #     return time
 
 
     # Extracts the best possible time information from data's directory structure and file name 
@@ -843,16 +760,6 @@ class Patcher:
         file_list.sort()
         return file_list
 
-        # if list_labels:
-        #     root = self.config["Input"]["labels_root"]
-        #     glob_string = self.config["Input"]["labels_glob"]
-        # else:
-        #     root = self.config["Input"]["examples_root"]
-        #     glob_string = self.config["Input"]["examples_glob"]
-
-        
-        # return glob.glob(glob_path)
-
 
 '''
 Next two functions functions I wrote while at UBC. Useful but maybe could be updated.
@@ -911,9 +818,6 @@ if __name__ == "__main__":
     parser.add_argument('--run_num', type=int, help='Number to label this run')
     parser.add_argument('--config_path', type=str, help='Path to config file')
     args = parser.parse_args()
-    # # TODO: The array in the argument below is TEMP
-    # args = parser.parse_args(["--run_num", "1", "--config_path", "/Users/tschmidt/repos/hail/configs/patcher.cfg"])
-
 
     # TODO: Switch this to command line argument
     patcher = Patcher(args.run_num)

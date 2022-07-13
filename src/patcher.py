@@ -11,6 +11,7 @@ import copy
 import argparse
 import warnings
 import xesmf as xe
+import random
 
 
 # NOTE: netcdf4 also need to be manually installed as dependencies
@@ -77,7 +78,6 @@ class Patcher:
             raise IOError(os.path.split(one_file)[-1] + " is an unsupported filetype. Only filetypes supported currenly are .nc and .grib/.grib2")
 
 
-    # TODO: MAJOR: Make sure this randomizes time order so it doesn't always return first time first
     # NOTE: Only works in multi-dateset case. Not to be used for 1 dataset case.
     def _compare_datetimes_with_IO(self, current_index, chosen_date_indeces, all_datetimes,
                                          data_settings_cfgs, datasets_paths, chosen_resolution, 
@@ -109,6 +109,7 @@ class Patcher:
                     datetimes_adjusted = []
                     for current_datetime in ds[time_cord_name].to_numpy():
                         datetimes_adjusted.append(current_datetime.astype(chosen_resolution))
+                    random.shuffle(datetimes_adjusted)
 
                     all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]] = datetimes_adjusted
                     ds.close()
@@ -195,7 +196,9 @@ class Patcher:
         feature_patches_root = settings_dict["Output"]["examples_root"]
         label_patches_root = settings_dict["Output"]["labels_root"]
         n_patches = settings_dict["Patches"]["number_of_patches"]
+        max_num_of_searches = settings_dict["Stopping"]["max_num_of_searches"]
         patches_per_time = settings_dict["Patches"]["patches_per_unit_time"]
+        patches_per_balanced_filter = settings_dict["Patches"]["patches_per_balanced_filter"]
         chosen_resolution = settings_dict["Patches"]["chosen_resolution"]
         if settings_dict["Patches"]["max_times_num_per_file"] is None: # NOTE: This is for the number of specific times alowed to be extraced from one set of files. NOT NUMBER OF PATCHES ALLOWED PER FILE
             max_times_num_per_file = np.inf
@@ -213,6 +216,7 @@ class Patcher:
         datasets_datetimes = []
         datasets_date_resolutions = []
         datasets_date_resolution_vals = []
+        filtered_balanced_counts = []
         for data_settings_cfg in data_settings_cfgs:
             file_list = self.create_file_list(data_settings_cfg["Path"]["root_dir"], 
                                               data_settings_cfg["Path"]["path_glob"], 
@@ -230,6 +234,11 @@ class Patcher:
             datasets_datetimes.append(dateset_datetimes)
             datasets_date_resolutions.append(dataset_date_resolution)
             datasets_date_resolution_vals.append(dataset_date_resolution_val)
+            for i in data_settings_cfg["Filtration"]["filters_balanced"]:
+                filtered_balanced_counts.append(0)
+        
+        if len(filtered_balanced_counts) == 0:
+            filtered_balanced_counts = [0]
 
         # Set top level lists to numpy arrays for more functionality
         datasets_paths = np.array(datasets_paths, dtype=list)
@@ -269,6 +278,7 @@ class Patcher:
             chosen_date_indeces.append([])
         date_counter = 0
         data_per_file_counter = 0
+        main_loop_counter = 0
         # Setup solution_indeces_files and solution_indeces_times for case where we only are loading one dataset
         if len(chosen_date_indeces) == 1:
             solution_indeces_files = date_indeces
@@ -276,11 +286,19 @@ class Patcher:
         #TODO: Make a bunch of checks here that will throw full exceptions if stuff missing that is needed for the main loop.
         # For example check if the dataset(s) are all empty
 
-        loop_number = n_patches // patches_per_time
+        number_of_patches_per_balanced_var = n_patches / len(filtered_balanced_counts)
         feature_patches = None
         label_patches = None
 
-        for n in tqdm(np.arange(0,loop_number)):
+        while np.any(np.array(filtered_balanced_counts) < number_of_patches_per_balanced_var):
+            if main_loop_counter % 50 == 0:
+                print("Reached search number: " + str(main_loop_counter))
+
+            if main_loop_counter == max_num_of_searches:
+                warnings.warn('WARNING: Hit maximum number of allowed searches set by "max_num_of_searches". Number of completed patches may be less than expected.')
+                break
+            main_loop_counter = main_loop_counter + 1
+        
             counters_dict = {"date_counter": date_counter,
                              "data_per_file_counter": data_per_file_counter}
             flags_dict = {"load_new_files": load_new_files,
@@ -314,10 +332,10 @@ class Patcher:
             reproj_datasets, dataset_empty_or_out_of_range = self._reproject_datasets(loaded_datasets, reproj_ds_index)
 
             if dataset_empty_or_out_of_range:
-                warnings.warn('WARNING: At least one of the selected dataset files contained data that was entirely missing or data that did not spatially aligned with the other data. Had to skip and total number of patches may now be less than expected.')
+                warnings.warn('WARNING: At least one of the selected dataset files contained data that was entirely missing or data that did not spatially align with the other datasets. Continuing search...')
                 continue
 
-            all_patches = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index)
+            all_patches, filtered_balanced_counts = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter)
 
             # TODO: MAJOR: THIS IS MISSING FUNCTIONALITY. Needs to concat patches that fall under the same category (label or feature) from differnt datasets along the list of variables
             # rather than just n_samples. Right now it will only concat things across n_samples which is really broken.
@@ -344,6 +362,8 @@ class Patcher:
             label_patch_path = os.path.join(label_patches_root, str(self.run_num) + ".nc")
             label_patches.to_netcdf(label_patch_path)
 
+        print("Completed on search number: " + str(main_loop_counter))
+
 
     def _find_indeces_of_matching_datasets(self, index_dict, flags_dict, counters_dict, lowest_resolution_dates, all_found_datetimes_adjusted,
                                            datasets_datetimes, data_settings_cfgs, datasets_paths, chosen_resolution, max_times_num_per_file):
@@ -368,7 +388,7 @@ class Patcher:
                     for i, dataset_datetimes in enumerate(lowest_resolution_dates):
 
                         dataset_datetimes = np.array(dataset_datetimes)
-                        chosen_date_indeces[i] = np.where(dataset_datetimes == lowest_resolution_dates[-1][date_indeces[date_counter]])[0]
+                        chosen_date_indeces[i] = random.shuffle(np.where(dataset_datetimes == lowest_resolution_dates[-1][date_indeces[date_counter]])[0])
 
                     date_counter = date_counter + 1
                     if np.all([len(i) != 0 for i in chosen_date_indeces]):
@@ -432,6 +452,13 @@ class Patcher:
         return False, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted
 
     
+    def _add_custom_vars(self, ds, data_settings_cfgs, current_ds_index):
+        scope = locals()
+        for custom_var in data_settings_cfgs[current_ds_index]["Modification"]["custom_vars"]:
+            ds.assign(eval(custom_var, scope))
+        return ds
+
+    
     def _load_datasets_from_disk(self, chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs):
         loaded_datasets = []
         reproj_ds_index = -1
@@ -464,12 +491,14 @@ class Patcher:
             if data_settings_cfgs[i]["Data"]["reproj_target"]:
                 reproj_ds_index = i
 
+            ds = self._add_custom_vars(ds, data_settings_cfgs, i)
+
             loaded_datasets.append(ds)
 
         if reproj_ds_index == -1:
             raise Exception("No dataset has been designated as the reproj_target. You must designate exactly one as this. Even if only loading one dataset.")
 
-        return loaded_datasets
+        return loaded_datasets, reproj_ds_index
 
 
     def _reproject_datasets(self, loaded_datasets, reproj_ds_index):
@@ -498,62 +527,122 @@ class Patcher:
 
         return reproj_datasets, dataset_empty_or_out_of_range
 
+
+    def _filter_patch_pixels(self, reproj_datasets, patch_size, grid_size, x_dim_name, y_dim_name, data_settings_cfgs, filtered_balanced_counts):
+        vaid_pixels_bool = np.ones((grid_size[0],grid_size[1],len(filtered_balanced_counts)))
+        filter_count_local = 0
+        filtered_balanced_pixels = []
+        scope = locals()
+
+        for x in range(grid_size[0]):
+            for y in range(grid_size[1]):
+                for i, ds in enumerate(reproj_datasets):
+                    patch = self._make_patch(ds, grid_size, patch_size, x, y, x_dim_name, y_dim_name)
+                    if patch is None:
+                        vaid_pixels_bool[x,y,:] = 0
+                        break
+                    failed_filter = False
+                    for key_name in patch.keys():
+                        data_var = patch[key_name].to_numpy()
+                        if np.isnan(data_var).any():
+                            failed_filter = True
+                            break
+                    for j, filter in enumerate(data_settings_cfgs[i]["Filtration"]["filters"]):
+                        if np.sum(eval(filter, scope)) < data_settings_cfgs[i]["Filtration"]["filter_patch_threshold"][j]:
+                            failed_filter = True
+                            break
+                    if failed_filter:
+                        vaid_pixels_bool[x,y,:] = 0
+                        break
+                    for j, filter in enumerate(data_settings_cfgs[i]["Filtration"]["filters_balanced"]):
+                        if np.sum(eval(filter, scope)) < data_settings_cfgs[i]["Filtration"]["filter_patch_threshold_balanced"][j]:
+                            vaid_pixels_bool[x,y,filter_count_local] = 0
+                            filter_count_local = filter_count_local + 1
+        
+        for i in range(len(filtered_balanced_counts)):
+            filtered_balanced_pixels.append(np.array(np.where(vaid_pixels_bool[:,:,i] == 1)))
+
+        return filtered_balanced_pixels
+
     
-    def _make_patches(self, reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index):
+    def _make_patches(self, reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter):
         x_dim_name = data_settings_cfgs[reproj_ds_index]["Data"]["x_dim_name"]
         y_dim_name = data_settings_cfgs[reproj_ds_index]["Data"]["y_dim_name"]
         reproj_ds = reproj_datasets[reproj_ds_index]
-
-        possible_x_indeces_for_patches = None
-        possible_y_indeces_for_patches = None
-        smallest_indeces_list_len = np.inf
-        for ds in reproj_datasets:
-            for key_name in ds.keys():
-                data_var = ds[key_name].to_numpy()
-                possible_pixels = np.where(np.logical_not(np.isnan(data_var)))
-                if len(possible_pixels[0]) < smallest_indeces_list_len:
-                    smallest_indeces_list_len = len(possible_pixels[0])
-                    possible_x_indeces_for_patches = possible_pixels[0]
-                    possible_y_indeces_for_patches = possible_pixels[1]
-
-        pixel_counter = 0
-        pixel_indeces = np.random.choice(np.arange(0,len(possible_x_indeces_for_patches)), size=len(possible_x_indeces_for_patches), replace=False)
         x_max = reproj_ds.dims[x_dim_name]
         y_max = reproj_ds.dims[y_dim_name]
         all_patches = []
         grid_size = [x_max, y_max]
-        for i in range(patches_per_time):
-            has_nans_in_patch = True
-            while has_nans_in_patch and pixel_counter < len(pixel_indeces):
-                has_nans_in_patch = False
-                x_i = possible_x_indeces_for_patches[pixel_indeces[pixel_counter]]
-                y_i = possible_y_indeces_for_patches[pixel_indeces[pixel_counter]]
-                single_dataset_patches = []
-                for ds in reproj_datasets:
-                    patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i, x_dim_name, y_dim_name)
-                    if patch is None:
-                        has_nans_in_patch = True
-                        single_dataset_patches = []
-                        break
-                    for key_name in patch.keys():
-                        data_var = patch[key_name].to_numpy()
-                        if np.isnan(data_var).any():
-                            has_nans_in_patch = True
-                    if has_nans_in_patch:
-                        single_dataset_patches = []
-                        break
-                    single_dataset_patches.append(patch)
-                pixel_counter = pixel_counter + 1
+        pixel_counters = np.zeros(len(filtered_balanced_counts))
 
-                # TODO Make warning in above while loop (or somwhere after) warning that we ran out of pixels. Make similar to other while loop warning.
-            
+        # possible_x_indeces_for_patches = None
+        # possible_y_indeces_for_patches = None
+        # smallest_indeces_list_len = np.inf
+        # for ds in reproj_datasets:
+        #     for key_name in ds.keys():
+        #         data_var = ds[key_name].to_numpy()
+        #         possible_pixels = np.where(np.logical_not(np.isnan(data_var)))
+        #         if len(possible_pixels[0]) < smallest_indeces_list_len:
+        #             smallest_indeces_list_len = len(possible_pixels[0])
+        #             possible_x_indeces_for_patches = possible_pixels[0]
+        #             possible_y_indeces_for_patches = possible_pixels[1]
+
+        # pixel_counter = 0
+        # pixel_indeces = np.random.choice(np.arange(0,len(possible_x_indeces_for_patches)), size=len(possible_x_indeces_for_patches), replace=False)
+
+        filtered_balanced_pixels = self._filter_patch_pixels(reproj_datasets,patch_size,grid_size,x_dim_name,y_dim_name,data_settings_cfgs,filtered_balanced_counts)
+        
+        for i in range(patches_per_time):
+            single_dataset_patches = []
+            filter_balance_order = np.array(filtered_balanced_counts).argsort()
+            for filter_balance_ind in filter_balance_order:
+                if filtered_balanced_counts[filter_balance_ind] < patches_per_balanced_filter and len(filtered_balanced_pixels[filter_balance_ind]) > 0 and pixel_counters[filter_balance_ind] < len(filtered_balanced_pixels[filter_balance_ind]):
+                    x_i = filtered_balanced_pixels[filter_balance_ind][0][pixel_counters[filter_balance_ind]]
+                    y_i = filtered_balanced_pixels[filter_balance_ind][1][pixel_counters[filter_balance_ind]]
+                    
+                    for ds in reproj_datasets:
+                        # This should never return none because filtered_balanced_pixels was checked before
+                        patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i, x_dim_name, y_dim_name)
+                        single_dataset_patches.append(patch)
+
+                    filtered_balanced_counts[filter_balance_ind] = filtered_balanced_counts[filter_balance_ind] + 1
+                    pixel_counters[filter_balance_ind] = pixel_counters[filter_balance_ind] + 1
+                    break
+
             if len(single_dataset_patches) != 0:
                 all_patches.append(single_dataset_patches)
+
+            # while has_nans_in_patch and pixel_counter < len(pixel_indeces):
+            #     has_nans_in_patch = False
+            #     x_i = possible_x_indeces_for_patches[pixel_indeces[pixel_counter]]
+            #     y_i = possible_y_indeces_for_patches[pixel_indeces[pixel_counter]]
+            #     single_dataset_patches = []
+            #     for ds in reproj_datasets:
+            #         patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i, x_dim_name, y_dim_name)
+            #         if patch is None:
+            #             has_nans_in_patch = True
+            #             single_dataset_patches = []
+            #             break
+            #         for key_name in patch.keys():
+            #             data_var = patch[key_name].to_numpy()
+            #             if np.isnan(data_var).any():
+            #                 has_nans_in_patch = True
+            #         if has_nans_in_patch:
+            #             single_dataset_patches = []
+            #             break
+            #         single_dataset_patches.append(patch)
+            #     pixel_counter = pixel_counter + 1
+            
+            # if len(single_dataset_patches) != 0:
+            #     all_patches.append(single_dataset_patches)
+
+        if np.sum(pixel_counters) < patches_per_time:
+            warnings.warn("While generating patches for a single timestep, the function _make_patches ran out of possible patches that meet the set filters' requirements. Continuing search...")
 
         for ds in reproj_datasets:
             ds.close()
 
-        return all_patches
+        return all_patches, filtered_balanced_counts
 
     
     def _concat_patches(self, patches, patch):
@@ -782,6 +871,7 @@ def cfg_parser(cfg_object):
     return new_cfg
 
 
+# TODO: Fix the issue with ' inside string case below for new settings
 # Not my favorite solution, but it is easy to read and understand.
 # Should be robust as well.
 def value_parser(value):

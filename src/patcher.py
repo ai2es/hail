@@ -78,10 +78,26 @@ class Patcher:
             raise IOError(os.path.split(one_file)[-1] + " is an unsupported filetype. Only filetypes supported currenly are .nc and .grib/.grib2")
 
 
+    # TODO: MAJOR: Make exception in here for case where decode_cf=False has to run but the dataset's has_time_cord=True
+    def _netcdf_loader(self, path):
+        try: 
+            ds = xr.open_dataset(path, decode_cf=True)
+        except:
+            try:
+                ds = xr.open_dataset(path, decode_cf=False)
+                warnings.warn('WARNING: One or more of your selected dataset(s) contains at least one netcdf file that does not follow netcdf convections. Less useful netcdf loader had to be used.')
+            except:
+                raise Exception('Unable to load at least one of the netcdf files! Had to kill patcher. Note: This may mean I need a more robust _netcdf_loader method. Talk to Tobias.')
+
+        return ds
+
+
     # NOTE: Only works in multi-dateset case. Not to be used for 1 dataset case.
     def _compare_datetimes_with_IO(self, current_index, chosen_date_indeces, all_datetimes,
                                          data_settings_cfgs, datasets_paths, chosen_resolution, 
-                                         solution_indeces_files=None, solution_indeces_times=None, chosen_datetimes_adjusted=None, all_found_datetimes_adjusted = None):
+                                         solution_indeces_files=None, solution_indeces_times=None, 
+                                         chosen_datetimes_adjusted=None, all_found_datetimes_adjusted = None, 
+                                         all_found_time_indeces_adjusted = None):
         found_files = False
         if solution_indeces_files is None:
             solution_indeces_files = np.zeros(len(chosen_date_indeces), dtype=np.int64)
@@ -94,24 +110,33 @@ class Patcher:
         # TODO: Double check that the setup done below is correct (AND THAT LOGIC IN LOOP WHERE THIS FUNCTION IS CALLED IS CORRECT)
         if all_found_datetimes_adjusted is None:
             all_found_datetimes_adjusted = []
+            all_found_time_indeces_adjusted = []
             for i in range(len(datasets_paths)):
                 all_found_datetimes_adjusted_cols = []
+                all_found_time_indeces_adjusted_cols = []
                 all_found_datetimes_adjusted.append(all_found_datetimes_adjusted_cols)
+                all_found_time_indeces_adjusted.append(all_found_time_indeces_adjusted_cols)
                 for j in range(len(datasets_paths[i])):
                     all_found_datetimes_adjusted[i].append(None)
+                    all_found_time_indeces_adjusted[i].append(None)
 
         for i in range(solution_indeces_files[current_index], len(chosen_date_indeces[current_index])):
             if data_settings_cfgs[current_index]["Data"]["use_internal_times_when_finding_files"]:
                 if all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]] is None:
                     time_cord_name = data_settings_cfgs[current_index]["Data"]["time_cord_name"]
-                    ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
+                    ds = self._netcdf_loader(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
                     # TODO: This is perhaps an extra loop. Consider if this can be removed later.
                     datetimes_adjusted = []
+                    time_indeces_adjusted = np.arange(len(ds[time_cord_name].to_numpy())).tolist()
                     for current_datetime in ds[time_cord_name].to_numpy():
                         datetimes_adjusted.append(current_datetime.astype(chosen_resolution))
-                    random.shuffle(datetimes_adjusted)
+                    combined_lists_for_shuffle = list(zip(datetimes_adjusted, time_indeces_adjusted))
+                    random.shuffle(combined_lists_for_shuffle)
+                    datetimes_adjusted, time_indeces_adjusted = zip(*combined_lists_for_shuffle)
+                    datetimes_adjusted, time_indeces_adjusted = list(datetimes_adjusted), list(time_indeces_adjusted)
 
                     all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]] = datetimes_adjusted
+                    all_found_time_indeces_adjusted[current_index][chosen_date_indeces[current_index][i]] = time_indeces_adjusted
                     ds.close()
 
                 for j in range(solution_indeces_times[current_index], len(all_found_datetimes_adjusted[current_index][chosen_date_indeces[current_index][i]])):
@@ -119,23 +144,27 @@ class Patcher:
                     chosen_datetimes_adjusted[current_index] = current_datetime
 
                     if current_index == 0:
-                        found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
+                        found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted, all_found_time_indeces_adjusted = self._compare_datetimes_with_IO(
+                                                                                                                                                    current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                                                     data_settings_cfgs, datasets_paths, 
                                                                                                                                                     chosen_resolution, solution_indeces_files, 
-                                                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted, all_found_datetimes_adjusted)
+                                                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted, 
+                                                                                                                                                    all_found_datetimes_adjusted, all_found_time_indeces_adjusted)
 
                     elif chosen_datetimes_adjusted[current_index-1] == current_datetime:
                         if current_index == len(chosen_date_indeces)-1:
                             found_files = True
 
                         else:
-                            found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
+                            found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted, all_found_time_indeces_adjusted = self._compare_datetimes_with_IO(
+                                                                                                                                                        current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                                                         data_settings_cfgs, datasets_paths, 
                                                                                                                                                         chosen_resolution, solution_indeces_files, 
-                                                                                                                                                        solution_indeces_times, chosen_datetimes_adjusted, all_found_datetimes_adjusted)
+                                                                                                                                                        solution_indeces_times, chosen_datetimes_adjusted, 
+                                                                                                                                                        all_found_datetimes_adjusted, all_found_time_indeces_adjusted)
 
                     if found_files:
-                        solution_indeces_times[current_index] = j
+                        solution_indeces_times[current_index] = all_found_time_indeces_adjusted[current_index][chosen_date_indeces[current_index][i]][j]
                         break
 
             else:
@@ -143,12 +172,14 @@ class Patcher:
                 chosen_datetimes_adjusted[current_index] = current_datetime
 
                 if current_index == 0:
-                    found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
+                    found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted, all_found_time_indeces_adjusted = self._compare_datetimes_with_IO(
+                                                                                                                                                current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                                                 data_settings_cfgs, datasets_paths, 
                                                                                                                                                 chosen_resolution, solution_indeces_files, 
-                                                                                                                                                solution_indeces_times, chosen_datetimes_adjusted, all_found_datetimes_adjusted)
+                                                                                                                                                solution_indeces_times, chosen_datetimes_adjusted, 
+                                                                                                                                                all_found_datetimes_adjusted, all_found_time_indeces_adjusted)
                     if found_files and data_settings_cfgs[current_index]["Data"]["has_time_cord"]:
-                        ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
+                        ds = self._netcdf_loader(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
                         time_cord_name = data_settings_cfgs[current_index]["Data"]["time_cord_name"]
                         for j, current_datetime in enumerate(ds[time_cord_name].to_numpy()):
                             if current_datetime.astype(chosen_resolution) == chosen_datetimes_adjusted[current_index+1]:
@@ -163,12 +194,14 @@ class Patcher:
                         found_files = True
 
                     else:
-                        found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(current_index + 1, chosen_date_indeces, all_datetimes, 
+                        found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted, all_found_time_indeces_adjusted = self._compare_datetimes_with_IO(
+                                                                                                                                                    current_index + 1, chosen_date_indeces, all_datetimes, 
                                                                                                                                                     data_settings_cfgs, datasets_paths, 
                                                                                                                                                     chosen_resolution, solution_indeces_files, 
-                                                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted, all_found_datetimes_adjusted) 
+                                                                                                                                                    solution_indeces_times, chosen_datetimes_adjusted, 
+                                                                                                                                                    all_found_datetimes_adjusted, all_found_time_indeces_adjusted) 
                     if found_files and data_settings_cfgs[current_index]["Data"]["has_time_cord"]:
-                        ds = xr.open_dataset(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
+                        ds = self._netcdf_loader(datasets_paths[current_index][chosen_date_indeces[current_index][i]])
                         time_cord_name = data_settings_cfgs[current_index]["Data"]["time_cord_name"]
                         for j, current_datetime in enumerate(ds[time_cord_name].to_numpy()):
                             if current_datetime.astype(chosen_resolution) == chosen_datetimes_adjusted[current_index-1]:
@@ -188,7 +221,7 @@ class Patcher:
             solution_indeces_files[current_index] = 0
 
 
-        return found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted
+        return found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted, all_found_time_indeces_adjusted
 
     
     def run(self, settings_dict):
@@ -265,6 +298,7 @@ class Patcher:
             lowest_resolution_dates.append(datetimes_adjusted)
 
         all_found_datetimes_adjusted = None
+        all_found_time_indeces_adjusted = None
         
         # Main high level variables that govern the flow of patching.
         load_new_files = True
@@ -290,7 +324,7 @@ class Patcher:
         feature_patches = None
         label_patches = None
 
-        while np.any(np.array(filtered_balanced_counts) < number_of_patches_per_balanced_var):
+        while np.any(np.array(filtered_balanced_counts) < number_of_patches_per_balanced_var - 1):
             if main_loop_counter % 50 == 0:
                 print("Reached search number: " + str(main_loop_counter))
 
@@ -309,8 +343,8 @@ class Patcher:
                           "time_indeces": time_indeces,
                           "chosen_date_indeces": chosen_date_indeces}
 
-            ran_out_of_files, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted = self._find_indeces_of_matching_datasets(index_dict, flags_dict, 
-                                                                                              counters_dict, lowest_resolution_dates, all_found_datetimes_adjusted,
+            ran_out_of_files, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted, all_found_time_indeces_adjusted = self._find_indeces_of_matching_datasets(index_dict, flags_dict, 
+                                                                                              counters_dict, lowest_resolution_dates, all_found_datetimes_adjusted, all_found_time_indeces_adjusted, 
                                                                                               datasets_datetimes, data_settings_cfgs, datasets_paths, chosen_resolution, max_times_num_per_file)
 
             if ran_out_of_files:
@@ -327,9 +361,17 @@ class Patcher:
             date_counter = counters_dict["date_counter"]
             data_per_file_counter = counters_dict["data_per_file_counter"]
 
-            loaded_datasets, reproj_ds_index = self._load_datasets_from_disk(chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs)
+            loaded_datasets, reproj_ds_index, data_settings_cfgs = self._load_datasets_from_disk(chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs)
 
             reproj_datasets, dataset_empty_or_out_of_range = self._reproject_datasets(loaded_datasets, reproj_ds_index)
+
+            # Increment index system for loop around (only relevant for multi-dataset case)
+            if data_settings_cfgs[-1]["Data"]["use_internal_times_when_finding_files"]:
+                solution_indeces_times[-1] = solution_indeces_times[-1] + 1
+            else:
+                solution_indeces_files[-1] = solution_indeces_files[-1] + 1
+            if data_per_file_counter == max_times_num_per_file:
+                load_new_files = True
 
             if dataset_empty_or_out_of_range:
                 warnings.warn('WARNING: At least one of the selected dataset files contained data that was entirely missing or data that did not spatially align with the other datasets. Continuing search...')
@@ -346,14 +388,6 @@ class Patcher:
                     else:
                         feature_patches = self._concat_patches(feature_patches, patch)
 
-            # Increment index system for loop around (only relevant for multi-dataset case)
-            if data_settings_cfgs[-1]["Data"]["use_internal_times_when_finding_files"]:
-                solution_indeces_times[-1] = solution_indeces_times[-1] + 1
-            else:
-                solution_indeces_files[-1] = solution_indeces_files[-1] + 1
-            if data_per_file_counter == max_times_num_per_file:
-                    load_new_files = True
-            
         if feature_patches is not None:
             feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
             feature_patches.to_netcdf(feature_patch_path)
@@ -365,7 +399,7 @@ class Patcher:
         print("Completed on search number: " + str(main_loop_counter))
 
 
-    def _find_indeces_of_matching_datasets(self, index_dict, flags_dict, counters_dict, lowest_resolution_dates, all_found_datetimes_adjusted,
+    def _find_indeces_of_matching_datasets(self, index_dict, flags_dict, counters_dict, lowest_resolution_dates, all_found_datetimes_adjusted, all_found_time_indeces_adjusted,
                                            datasets_datetimes, data_settings_cfgs, datasets_paths, chosen_resolution, max_times_num_per_file):
         # TODO: Turn the packing and unpacking of these dicts into methods (including outside this method)
         chosen_date_indeces = index_dict["chosen_date_indeces"]
@@ -388,7 +422,9 @@ class Patcher:
                     for i, dataset_datetimes in enumerate(lowest_resolution_dates):
 
                         dataset_datetimes = np.array(dataset_datetimes)
-                        chosen_date_indeces[i] = random.shuffle(np.where(dataset_datetimes == lowest_resolution_dates[-1][date_indeces[date_counter]])[0])
+                        ordered_indeces = np.where(dataset_datetimes == lowest_resolution_dates[-1][date_indeces[date_counter]])[0]
+                        random.shuffle(ordered_indeces)
+                        chosen_date_indeces[i] = ordered_indeces
 
                     date_counter = date_counter + 1
                     if np.all([len(i) != 0 for i in chosen_date_indeces]):
@@ -399,11 +435,12 @@ class Patcher:
                 if date_counter == len(date_indeces) and load_new_files:
                     break
 
-                found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted = self._compare_datetimes_with_IO(0,chosen_date_indeces, datasets_datetimes,
+                found_files, solution_indeces_files, solution_indeces_times, all_found_datetimes_adjusted, all_found_time_indeces_adjusted = self._compare_datetimes_with_IO(0,chosen_date_indeces, datasets_datetimes,
                                                                                                                                             data_settings_cfgs,datasets_paths,chosen_resolution,
                                                                                                                                             solution_indeces_files=solution_indeces_files,
                                                                                                                                             solution_indeces_times=solution_indeces_times, 
-                                                                                                                                            all_found_datetimes_adjusted=all_found_datetimes_adjusted)
+                                                                                                                                            all_found_datetimes_adjusted=all_found_datetimes_adjusted,
+                                                                                                                                            all_found_time_indeces_adjusted=all_found_time_indeces_adjusted)
 
                 if not found_files:
                     load_new_files = True
@@ -411,19 +448,19 @@ class Patcher:
                     data_per_file_counter = data_per_file_counter + 1
 
             if date_counter == len(date_indeces) and load_new_files:
-                return True, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted
+                return True, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted, all_found_time_indeces_adjusted
 
             found_files = False
 
         else:
             if date_counter == len(date_indeces):
-                return True, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted
+                return True, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted, all_found_time_indeces_adjusted
 
             solution_indeces_files = [date_indeces[date_counter]]
             solution_indeces_times = [0]
             if data_settings_cfgs[0]["Data"]["has_time_cord"]:
                 if data_per_file_counter == 0:
-                    ds = xr.open_dataset(datasets_paths[0][date_indeces[date_counter]])
+                    ds = self._netcdf_loader(datasets_paths[0][date_indeces[date_counter]])
                     time_cord_name = data_settings_cfgs[0]["Data"]["time_cord_name"]
                     current_datetime = ds[time_cord_name]
                     ds.close()
@@ -449,7 +486,7 @@ class Patcher:
         counters_dict["date_counter"] = date_counter
         counters_dict["data_per_file_counter"] = data_per_file_counter
 
-        return False, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted
+        return False, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted, all_found_time_indeces_adjusted
 
     
     def _add_custom_vars(self, ds, data_settings_cfgs, current_ds_index):
@@ -464,15 +501,12 @@ class Patcher:
         reproj_ds_index = -1
         for i, (file_index, time_index) in enumerate(zip(solution_indeces_files, solution_indeces_times)):
             if len(chosen_date_indeces) == 1:
-                ds = xr.open_dataset(datasets_paths[i][file_index])
+                ds = self._netcdf_loader(datasets_paths[i][file_index])
             else:
-                ds = xr.open_dataset(datasets_paths[i][chosen_date_indeces[i][file_index]])
+                ds = self._netcdf_loader(datasets_paths[i][chosen_date_indeces[i][file_index]])
             if data_settings_cfgs[i]["Data"]["has_time_cord"]:
                 time_dim_name = data_settings_cfgs[i]["Data"]["time_dim_name"]
                 ds = ds[{time_dim_name: time_index}]
-
-            # Select only the data we want
-            ds = ds[data_settings_cfgs[i]["Data"]["selected_vars"]]
 
             lons = ds[data_settings_cfgs[i]["Data"]["lon_cord_name"]].to_numpy()
             lats = ds[data_settings_cfgs[i]["Data"]["lat_cord_name"]].to_numpy()
@@ -484,7 +518,17 @@ class Patcher:
             else:
                 raise Exception("At least one dataset has lat/lons with either too few or too many dimensions. lat/lons must be either 2d or 1d.")
 
-            # TODO: Look into case where lon/lat coord already exist
+            # This is to deal with case where the new lon/lat coordinates we need to make have the same dimension names. Xarray doesn't like that
+            if data_settings_cfgs[i]["Data"]["x_dim_name"] == "lon":
+                ds = ds.rename_dims({"lon":"lon_dim"})
+                data_settings_cfgs[i]["Data"]["x_dim_name"] = "lon_dim"
+            if data_settings_cfgs[i]["Data"]["y_dim_name"] == "lat":
+                ds = ds.rename_dims({"lat":"lat_dim"})
+                data_settings_cfgs[i]["Data"]["y_dim_name"] = "lat_dim"
+
+            # Select only the data we want
+            ds = ds[data_settings_cfgs[i]["Data"]["selected_vars"]]
+
             ds = ds.assign_coords(lon=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lons))
             ds = ds.assign_coords(lat=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lats))
 
@@ -498,7 +542,7 @@ class Patcher:
         if reproj_ds_index == -1:
             raise Exception("No dataset has been designated as the reproj_target. You must designate exactly one as this. Even if only loading one dataset.")
 
-        return loaded_datasets, reproj_ds_index
+        return loaded_datasets, reproj_ds_index, data_settings_cfgs
 
 
     def _reproject_datasets(self, loaded_datasets, reproj_ds_index):
@@ -534,6 +578,7 @@ class Patcher:
         filtered_balanced_pixels = []
         scope = locals()
 
+        # TODO: Make sure that this also checks if patch will go out of dataset's domain bounds
         for x in range(grid_size[0]):
             for y in range(grid_size[1]):
                 for i, ds in enumerate(reproj_datasets):
@@ -559,6 +604,7 @@ class Patcher:
                             vaid_pixels_bool[x,y,filter_count_local] = 0
                             filter_count_local = filter_count_local + 1
         
+        # TODO: Randomize the order again??
         for i in range(len(filtered_balanced_counts)):
             filtered_balanced_pixels.append(np.array(np.where(vaid_pixels_bool[:,:,i] == 1)))
 
@@ -573,22 +619,7 @@ class Patcher:
         y_max = reproj_ds.dims[y_dim_name]
         all_patches = []
         grid_size = [x_max, y_max]
-        pixel_counters = np.zeros(len(filtered_balanced_counts))
-
-        # possible_x_indeces_for_patches = None
-        # possible_y_indeces_for_patches = None
-        # smallest_indeces_list_len = np.inf
-        # for ds in reproj_datasets:
-        #     for key_name in ds.keys():
-        #         data_var = ds[key_name].to_numpy()
-        #         possible_pixels = np.where(np.logical_not(np.isnan(data_var)))
-        #         if len(possible_pixels[0]) < smallest_indeces_list_len:
-        #             smallest_indeces_list_len = len(possible_pixels[0])
-        #             possible_x_indeces_for_patches = possible_pixels[0]
-        #             possible_y_indeces_for_patches = possible_pixels[1]
-
-        # pixel_counter = 0
-        # pixel_indeces = np.random.choice(np.arange(0,len(possible_x_indeces_for_patches)), size=len(possible_x_indeces_for_patches), replace=False)
+        pixel_counters = np.zeros(len(filtered_balanced_counts), dtype=np.int64)
 
         filtered_balanced_pixels = self._filter_patch_pixels(reproj_datasets,patch_size,grid_size,x_dim_name,y_dim_name,data_settings_cfgs,filtered_balanced_counts)
         
@@ -596,7 +627,7 @@ class Patcher:
             single_dataset_patches = []
             filter_balance_order = np.array(filtered_balanced_counts).argsort()
             for filter_balance_ind in filter_balance_order:
-                if filtered_balanced_counts[filter_balance_ind] < patches_per_balanced_filter and len(filtered_balanced_pixels[filter_balance_ind]) > 0 and pixel_counters[filter_balance_ind] < len(filtered_balanced_pixels[filter_balance_ind]):
+                if filtered_balanced_counts[filter_balance_ind] < patches_per_balanced_filter and len(filtered_balanced_pixels[filter_balance_ind][0]) > 0 and pixel_counters[filter_balance_ind] < len(filtered_balanced_pixels[filter_balance_ind][0]):
                     x_i = filtered_balanced_pixels[filter_balance_ind][0][pixel_counters[filter_balance_ind]]
                     y_i = filtered_balanced_pixels[filter_balance_ind][1][pixel_counters[filter_balance_ind]]
                     
@@ -612,31 +643,7 @@ class Patcher:
             if len(single_dataset_patches) != 0:
                 all_patches.append(single_dataset_patches)
 
-            # while has_nans_in_patch and pixel_counter < len(pixel_indeces):
-            #     has_nans_in_patch = False
-            #     x_i = possible_x_indeces_for_patches[pixel_indeces[pixel_counter]]
-            #     y_i = possible_y_indeces_for_patches[pixel_indeces[pixel_counter]]
-            #     single_dataset_patches = []
-            #     for ds in reproj_datasets:
-            #         patch = self._make_patch(ds, grid_size, patch_size, x_i, y_i, x_dim_name, y_dim_name)
-            #         if patch is None:
-            #             has_nans_in_patch = True
-            #             single_dataset_patches = []
-            #             break
-            #         for key_name in patch.keys():
-            #             data_var = patch[key_name].to_numpy()
-            #             if np.isnan(data_var).any():
-            #                 has_nans_in_patch = True
-            #         if has_nans_in_patch:
-            #             single_dataset_patches = []
-            #             break
-            #         single_dataset_patches.append(patch)
-            #     pixel_counter = pixel_counter + 1
-            
-            # if len(single_dataset_patches) != 0:
-            #     all_patches.append(single_dataset_patches)
-
-        if np.sum(pixel_counters) < patches_per_time:
+        if np.sum(pixel_counters + 1) < patches_per_time:
             warnings.warn("While generating patches for a single timestep, the function _make_patches ran out of possible patches that meet the set filters' requirements. Continuing search...")
 
         for ds in reproj_datasets:
@@ -895,7 +902,10 @@ def value_parser(value):
         output_value = []
         value = value.replace("[","")
         value = value.replace("]","")
-        value = value.split(",")
+        if len(value) != 0:
+            value = value.split(",")
+        else:
+            value = []
         for i in value:
             output_value.append(value_parser(i.strip()))
         return output_value

@@ -379,14 +379,16 @@ class Patcher:
 
             all_patches, filtered_balanced_counts = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter)
 
-            # TODO: MAJOR: THIS IS MISSING FUNCTIONALITY. Needs to concat patches that fall under the same category (label or feature) from differnt datasets along the list of variables
-            # rather than just n_samples. Right now it will only concat things across n_samples which is really broken.
             for single_dataset_patches in all_patches:
+                label_patch = None
+                feature_patch = None
                 for j, patch in enumerate(single_dataset_patches):
                     if data_settings_cfgs[j]["Data"]["is_label_data"]:
-                        label_patches = self._concat_patches(label_patches, patch)
+                        label_patch = self._merge_patches(label_patch, patch)
                     else:
-                        feature_patches = self._concat_patches(feature_patches, patch)
+                        feature_patch = self._merge_patches(feature_patch, patch)
+                label_patches = self._concat_patches(label_patches, label_patch)
+                feature_patches = self._concat_patches(feature_patches, feature_patch)
 
         if feature_patches is not None:
             feature_patch_path = os.path.join(feature_patches_root, str(self.run_num) + ".nc")
@@ -493,6 +495,15 @@ class Patcher:
         scope = locals()
         for custom_var in data_settings_cfgs[current_ds_index]["Modification"]["custom_vars"]:
             ds.assign(eval(custom_var, scope))
+        for i, dim_selection_name in enumerate(data_settings_cfgs[current_ds_index]["Filtration"]["dim_selection_names"]):
+            dim_selection_index = data_settings_cfgs[current_ds_index]["Filtration"]["dim_selction_index"][i]
+            if type(dim_selection_index) == int:
+                ds = ds[{dim_selection_name: dim_selection_index}]
+            elif dim_selection_index == "*":
+                random_index = random.randint(0,len(ds[dim_selection_name].to_numpy())-1)
+                ds = ds[{dim_selection_name: random_index}]
+            else:
+                raise Exception('Invalid input received for dim_selction_index setting. Must be int or "*".')
         return ds
 
     
@@ -574,14 +585,14 @@ class Patcher:
 
     def _filter_patch_pixels(self, reproj_datasets, patch_size, grid_size, x_dim_name, y_dim_name, data_settings_cfgs, filtered_balanced_counts):
         vaid_pixels_bool = np.ones((grid_size[0],grid_size[1],len(filtered_balanced_counts)))
-        filter_count_local = 0
+        filter_count_local = 0 #TODO: THIS IS LIKELY WRONG. SHOULD BE INITILIAZED INSIDE SECOND LOOP BELOW (OR REPLACED WITH J)
         filtered_balanced_pixels = []
         scope = locals()
 
-        # TODO: Make sure that this also checks if patch will go out of dataset's domain bounds
         for x in range(grid_size[0]):
             for y in range(grid_size[1]):
                 for i, ds in enumerate(reproj_datasets):
+                    # TODO: Make this more efficient by not using _make_patch????? (And maybe close the patch with .close below)
                     patch = self._make_patch(ds, grid_size, patch_size, x, y, x_dim_name, y_dim_name)
                     if patch is None:
                         vaid_pixels_bool[x,y,:] = 0
@@ -604,9 +615,13 @@ class Patcher:
                             vaid_pixels_bool[x,y,filter_count_local] = 0
                             filter_count_local = filter_count_local + 1
         
-        # TODO: Randomize the order again??
         for i in range(len(filtered_balanced_counts)):
-            filtered_balanced_pixels.append(np.array(np.where(vaid_pixels_bool[:,:,i] == 1)))
+            where_array = np.array(np.where(vaid_pixels_bool[:,:,i] == 1))
+            combined_lists_for_shuffle = list(zip(where_array[0], where_array[1]))
+            random.shuffle(combined_lists_for_shuffle)
+            where_array_x, where_array_y = zip(*combined_lists_for_shuffle)
+            where_array_x, where_array_y = np.array(where_array_x), np.array(where_array_y)
+            filtered_balanced_pixels.append(np.array([where_array_x, where_array_y])) # TODO: make sure the where can handle an empty case
 
         return filtered_balanced_pixels
 
@@ -650,6 +665,15 @@ class Patcher:
             ds.close()
 
         return all_patches, filtered_balanced_counts
+
+    
+    def _merge_patches(self, patches, patch):
+        if patches is None:
+            patches = copy.deepcopy(patch)
+        else:
+            patches = patches.merge(patch)
+
+        return patches
 
     
     def _concat_patches(self, patches, patch):
@@ -878,9 +902,7 @@ def cfg_parser(cfg_object):
     return new_cfg
 
 
-# TODO: Fix the issue with ' inside string case below for new settings
 # Not my favorite solution, but it is easy to read and understand.
-# Should be robust as well.
 def value_parser(value):
     try:
         return int(value)
@@ -896,12 +918,18 @@ def value_parser(value):
         return True
     if value.lower() == "none":
         return None
-    value = value.replace("\"","")
-    value = value.replace("'","")
-    if value[0] == "[" and value[-1] == "]":
+    if value[0] == '"' and value[-1] == '"' and len(value) >= 2:
+        value = re.sub(".$", "", value)
+        value = re.sub("^.", "", value)
+        return value
+    elif value[0] == "'" and value[-1] == "'" and len(value) >= 2:
+        value = re.sub(".$", "", value)
+        value = re.sub("^.", "", value)
+        return value
+    elif value[0] == "[" and value[-1] == "]":
         output_value = []
-        value = value.replace("[","")
-        value = value.replace("]","")
+        value = re.sub(".$", "", value)
+        value = re.sub("^.", "", value)
         if len(value) != 0:
             value = value.split(",")
         else:
@@ -909,7 +937,7 @@ def value_parser(value):
         for i in value:
             output_value.append(value_parser(i.strip()))
         return output_value
-    return value
+    raise Exception("value_parser failed. Invalid config setting: " + value)
 
 
 if __name__ == "__main__":

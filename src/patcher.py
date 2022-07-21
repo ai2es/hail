@@ -4,7 +4,6 @@ import numpy as np
 import configparser
 import os
 import glob
-from tqdm import tqdm
 import re
 from datetime import datetime
 import copy 
@@ -12,6 +11,7 @@ import argparse
 import warnings
 import xesmf as xe
 import random
+from collections import OrderedDict
 
 
 # NOTE: netcdf4 also need to be manually installed as dependencies
@@ -492,9 +492,6 @@ class Patcher:
 
     
     def _add_custom_vars(self, ds, data_settings_cfgs, current_ds_index):
-        scope = locals()
-        for custom_var in data_settings_cfgs[current_ds_index]["Modification"]["custom_vars"]:
-            ds.assign(eval(custom_var, scope))
         for i, dim_selection_name in enumerate(data_settings_cfgs[current_ds_index]["Filtration"]["dim_selection_names"]):
             dim_selection_index = data_settings_cfgs[current_ds_index]["Filtration"]["dim_selction_index"][i]
             if type(dim_selection_index) == int:
@@ -504,6 +501,15 @@ class Patcher:
                 ds = ds[{dim_selection_name: random_index}]
             else:
                 raise Exception('Invalid input received for dim_selction_index setting. Must be int or "*".')
+
+        for custom_var in data_settings_cfgs[current_ds_index]["Modification"]["custom_vars"]:
+            return_dict = OrderedDict()
+            exec(custom_var, globals().update(locals()), return_dict)
+            return_list = list(return_dict.items())
+            var_name = return_list[-1][0]
+            values = return_list[-1][-1]
+            ds = ds.assign({var_name: values})
+
         return ds
 
     
@@ -583,35 +589,47 @@ class Patcher:
         return reproj_datasets, dataset_empty_or_out_of_range
 
 
+    # NOTE: This is a runtime bottleneck. Improve.
     def _filter_patch_pixels(self, reproj_datasets, patch_size, grid_size, x_dim_name, y_dim_name, data_settings_cfgs, filtered_balanced_counts):
         vaid_pixels_bool = np.ones((grid_size[0],grid_size[1],len(filtered_balanced_counts)))
-        filter_count_local = 0 #TODO: THIS IS LIKELY WRONG. SHOULD BE INITILIAZED INSIDE SECOND LOOP BELOW (OR REPLACED WITH J)
         filtered_balanced_pixels = []
-        scope = locals()
 
         for x in range(grid_size[0]):
             for y in range(grid_size[1]):
+                filter_count_local = 0
                 for i, ds in enumerate(reproj_datasets):
-                    # TODO: Make this more efficient by not using _make_patch????? (And maybe close the patch with .close below)
+                    # TODO: Maybe close the patch with .close below?
                     patch = self._make_patch(ds, grid_size, patch_size, x, y, x_dim_name, y_dim_name)
                     if patch is None:
                         vaid_pixels_bool[x,y,:] = 0
                         break
                     failed_filter = False
+
                     for key_name in patch.keys():
                         data_var = patch[key_name].to_numpy()
                         if np.isnan(data_var).any():
                             failed_filter = True
                             break
+
                     for j, filter in enumerate(data_settings_cfgs[i]["Filtration"]["filters"]):
-                        if np.sum(eval(filter, scope)) < data_settings_cfgs[i]["Filtration"]["filter_patch_threshold"][j]:
+                        return_dict = OrderedDict()
+                        exec(filter, globals().update(locals()), return_dict)
+                        return_list = list(return_dict.items())
+                        values = return_list[-1][-1]
+                        if np.sum(values) < data_settings_cfgs[i]["Filtration"]["filter_patch_threshold"][j]:
                             failed_filter = True
                             break
+
                     if failed_filter:
                         vaid_pixels_bool[x,y,:] = 0
                         break
+
                     for j, filter in enumerate(data_settings_cfgs[i]["Filtration"]["filters_balanced"]):
-                        if np.sum(eval(filter, scope)) < data_settings_cfgs[i]["Filtration"]["filter_patch_threshold_balanced"][j]:
+                        return_dict = OrderedDict()
+                        exec(filter, globals().update(locals()), return_dict)
+                        return_list = list(return_dict.items())
+                        values = return_list[-1][-1]
+                        if np.sum(values) < data_settings_cfgs[i]["Filtration"]["filter_patch_threshold_balanced"][j]:
                             vaid_pixels_bool[x,y,filter_count_local] = 0
                             filter_count_local = filter_count_local + 1
         
@@ -927,16 +945,11 @@ def value_parser(value):
         value = re.sub("^.", "", value)
         return value
     elif value[0] == "[" and value[-1] == "]":
-        output_value = []
-        value = re.sub(".$", "", value)
-        value = re.sub("^.", "", value)
-        if len(value) != 0:
-            value = value.split(",")
+        if len(value) == 2:
+            return []
         else:
-            value = []
-        for i in value:
-            output_value.append(value_parser(i.strip()))
-        return output_value
+            # TODO: I am not pleased with this solution at all but it will do until I can be bothered to make it more secure.
+            return eval(value)
     raise Exception("value_parser failed. Invalid config setting: " + value)
 
 

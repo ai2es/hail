@@ -1,3 +1,4 @@
+from scipy.fftpack import dst
 import xarray as xr
 import pygrib
 import numpy as np
@@ -361,7 +362,7 @@ class Patcher:
             date_counter = counters_dict["date_counter"]
             data_per_file_counter = counters_dict["data_per_file_counter"]
 
-            loaded_datasets, reproj_ds_index, data_settings_cfgs = self._load_datasets_from_disk(chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs)
+            loaded_datasets, reproj_ds_index, x_dim_name, y_dim_name = self._load_datasets_from_disk(chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs)
 
             reproj_datasets, dataset_empty_or_out_of_range = self._reproject_datasets(loaded_datasets, reproj_ds_index)
 
@@ -377,7 +378,7 @@ class Patcher:
                 warnings.warn('WARNING: At least one of the selected dataset files contained data that was entirely missing or data that did not spatially align with the other datasets. Continuing search...')
                 continue
 
-            all_patches, filtered_balanced_counts = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter)
+            all_patches, filtered_balanced_counts = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter, x_dim_name, y_dim_name)
 
             for single_dataset_patches in all_patches:
                 label_patch = None
@@ -493,14 +494,14 @@ class Patcher:
     
     def _add_custom_vars(self, ds, data_settings_cfgs, current_ds_index):
         for i, dim_selection_name in enumerate(data_settings_cfgs[current_ds_index]["Filtration"]["dim_selection_names"]):
-            dim_selection_index = data_settings_cfgs[current_ds_index]["Filtration"]["dim_selction_index"][i]
+            dim_selection_index = data_settings_cfgs[current_ds_index]["Filtration"]["dim_selection_index"][i]
             if type(dim_selection_index) == int:
                 ds = ds[{dim_selection_name: dim_selection_index}]
             elif dim_selection_index == "*":
                 random_index = random.randint(0,len(ds[dim_selection_name].to_numpy())-1)
                 ds = ds[{dim_selection_name: random_index}]
             else:
-                raise Exception('Invalid input received for dim_selction_index setting. Must be int or "*".')
+                raise Exception('Invalid input received for dim_selection_index setting. Must be int or "*".')
 
         for custom_var in data_settings_cfgs[current_ds_index]["Modification"]["custom_vars"]:
             return_dict = OrderedDict()
@@ -538,16 +539,20 @@ class Patcher:
             # This is to deal with case where the new lon/lat coordinates we need to make have the same dimension names. Xarray doesn't like that
             if data_settings_cfgs[i]["Data"]["x_dim_name"] == "lon":
                 ds = ds.rename_dims({"lon":"lon_dim"})
-                data_settings_cfgs[i]["Data"]["x_dim_name"] = "lon_dim"
+                x_dim_name = "lon_dim"
+            else:
+                x_dim_name = data_settings_cfgs[i]["Data"]["x_dim_name"]
             if data_settings_cfgs[i]["Data"]["y_dim_name"] == "lat":
                 ds = ds.rename_dims({"lat":"lat_dim"})
-                data_settings_cfgs[i]["Data"]["y_dim_name"] = "lat_dim"
+                y_dim_name = "lat_dim"
+            else:
+                y_dim_name = data_settings_cfgs[i]["Data"]["y_dim_name"]
 
             # Select only the data we want
             ds = ds[data_settings_cfgs[i]["Data"]["selected_vars"]]
 
-            ds = ds.assign_coords(lon=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lons))
-            ds = ds.assign_coords(lat=((data_settings_cfgs[i]["Data"]["y_dim_name"],data_settings_cfgs[i]["Data"]["x_dim_name"]), lats))
+            ds = ds.assign_coords(lon=((y_dim_name,x_dim_name), lons))
+            ds = ds.assign_coords(lat=((y_dim_name,x_dim_name), lats))
 
             if data_settings_cfgs[i]["Data"]["reproj_target"]:
                 reproj_ds_index = i
@@ -559,7 +564,7 @@ class Patcher:
         if reproj_ds_index == -1:
             raise Exception("No dataset has been designated as the reproj_target. You must designate exactly one as this. Even if only loading one dataset.")
 
-        return loaded_datasets, reproj_ds_index, data_settings_cfgs
+        return loaded_datasets, reproj_ds_index, x_dim_name, y_dim_name
 
 
     def _reproject_datasets(self, loaded_datasets, reproj_ds_index):
@@ -644,9 +649,7 @@ class Patcher:
         return filtered_balanced_pixels
 
     
-    def _make_patches(self, reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter):
-        x_dim_name = data_settings_cfgs[reproj_ds_index]["Data"]["x_dim_name"]
-        y_dim_name = data_settings_cfgs[reproj_ds_index]["Data"]["y_dim_name"]
+    def _make_patches(self, reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter, x_dim_name, y_dim_name):
         reproj_ds = reproj_datasets[reproj_ds_index]
         x_max = reproj_ds.dims[x_dim_name]
         y_max = reproj_ds.dims[y_dim_name]

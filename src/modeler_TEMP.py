@@ -7,6 +7,8 @@ from tensorflow.keras.callbacks import EarlyStopping
 import tensorflow as tf
 from tensorflow import keras
 import py3nvml
+import argparse
+import json
 
 
 def predict():
@@ -87,7 +89,7 @@ def train():
     num_up_down_layers = 2
     filter_num = [2,4,8,16,32]
     learning_rate = 1e-4
-    loss_function = keras.losses.CategoricalCrossentropy() #losses.tversky #
+    loss_function = keras.losses.BinaryCrossentropy() #losses.tversky #
 
 
     #output
@@ -126,7 +128,7 @@ def train():
     # TODO: MAKE SURE THIS ISNT HARD CODED
     model = models.unet_2d((patch_size,patch_size,num_inputs), filter_num = filter_num, n_labels = n_labels, 
                             stack_num_down = num_up_down_layers, stack_num_up = num_up_down_layers, 
-                            activation = 'LeakyReLU', output_activation = 'Softmax', 
+                            activation = 'LeakyReLU', output_activation = 'Sigmoid', 
                             batch_norm = True, pool = True, unpool = True, name = 'multi_class_unet')
 
 
@@ -158,6 +160,55 @@ def train():
                             use_multiprocessing=True, max_queue_size=100)
 
 
+def create_parser():
+    '''
+    Create argument parser
+    '''
+    # Parse the command-line arguments
+    parser = argparse.ArgumentParser(description='Unet Model', fromfile_prefix_chars='@')
+
+    # High-level commands
+    parser.add_argument('--nogo', action='store_true', help='Do not perform the experiment')
+    parser.add_argument('--verbose', '-v', action='count', default=0, help="Verbosity level")
+    parser.add_argument('--exp_name', type=str, default="Simple", help="Experiment name for labelling")
+
+    # Data
+    parser.add_argument('--dataset', type=str, default='/home/fagg/datasets/radiant_earth/pa', help='Data set directory')
+    parser.add_argument('--rot_num', type=int, default=0, help='Rotation number to run')
+    parser.add_argument('--results_path', type=str, default='./results_hw8', help='Results directory')
+    parser.add_argument('--nclasses', type=int, default=7, help='Number of classes that are possible')
+    parser.add_argument('--image_size', type=int, default=256, help='Image size of each patch')
+    parser.add_argument('--channel_num', type=int, default=26, help='Number of channels for each patch')
+    parser.add_argument('--train_regex', type=str, default="*[012345678]", help='Regex for train data filenames')
+    parser.add_argument('--val_regex', type=str, default="*[9]", help='Regex for val data filenames')
+    parser.add_argument('--batch_size', type=int, default=8, help='Batch of patches to load at once')
+    parser.add_argument('--prefetch', type=int, default=2, help='Number of batches to prefetch in parallel with training')
+    parser.add_argument('--num_parallel_calls', type=int, default=4, help='Number of threads to use for I/O')
+
+    # CPU/GPU
+    parser.add_argument('--cpus_per_task', type=int, default=None, help="Number of threads to consume")
+    parser.add_argument('--gpu', action='store_true', help='Use a GPU')
+
+    # Model configs
+    parser.add_argument('--filter_nums', type=int, nargs='+', default=[8, 16, 32, 64], help="Number of filters in each CNN")
+    parser.add_argument('--kernel_sizes', type=int, nargs='+', default=[3, 3, 3, 3], help="Size of kernel for each CNN")
+    parser.add_argument('--stride_sizes', type=int, nargs='+', default=[2, 2, 2, 2], help="Size of stride for each max pool and up scale")
+    parser.add_argument('--cnn_nums', type=int, nargs='+', default=[3, 3, 3, 3], help="Number of CNNs at each layer")
+    parser.add_argument('--pool_sizes', type=int, nargs='+', default=[4, 4, 4, 4], help="Size of each max pool's pool size")
+    parser.add_argument('--conv_act', type=str, default="relu", help="Activation function for each conv layer")
+    parser.add_argument('--lrate', type=float, default=0.00005, help="Learning rate")
+    parser.add_argument('--L2_regularizer', '--l2', type=float, default=None, help="L2 regularization parameter")
+
+    # Early stopping
+    parser.add_argument('--min_delta', type=float, default=0.0, help="Minimum delta for early termination")
+    parser.add_argument('--patience', type=int, default=10, help="Patience for early termination")
+
+    # Training
+    parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
+    parser.add_argument('--steps_per_epoch', type=int, default=None, help="Number of gradient descent steps per epoch")
+    
+    return parser
+
 
 if __name__ == "__main__":
     #number of GPUS I need:
@@ -178,6 +229,9 @@ if __name__ == "__main__":
     
     tf.config.threading.set_intra_op_parallelism_threads(32)
     tf.config.threading.set_inter_op_parallelism_threads(32)
+
+    parser = create_parser()
+    args = parser.parse_args()
 
     # train()
     predict()

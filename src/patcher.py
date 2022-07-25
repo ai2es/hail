@@ -1,4 +1,3 @@
-from scipy.fftpack import dst
 import xarray as xr
 import pygrib
 import numpy as np
@@ -33,6 +32,7 @@ class Patcher:
         # config.read(config_path)
         # self.config = cfg_parser(config)
         self.run_num = run_num
+        warnings.simplefilter('once', category=RuntimeWarning)
 
     
     # TODO: Move this to the IOHelper script with collection of functions
@@ -86,7 +86,7 @@ class Patcher:
         except:
             try:
                 ds = xr.open_dataset(path, decode_cf=False)
-                warnings.warn('WARNING: One or more of your selected dataset(s) contains at least one netcdf file that does not follow netcdf convections. Less useful netcdf loader had to be used.')
+                warnings.warn('WARNING: One or more of your selected dataset(s) contains at least one netcdf file that does not follow netcdf convections. Less useful netcdf loader had to be used.', category=RuntimeWarning)
             except:
                 raise Exception('Unable to load at least one of the netcdf files! Had to kill patcher. Note: This may mean I need a more robust _netcdf_loader method. Talk to Tobias.')
 
@@ -232,7 +232,6 @@ class Patcher:
         n_patches = settings_dict["Patches"]["number_of_patches"]
         max_num_of_searches = settings_dict["Stopping"]["max_num_of_searches"]
         patches_per_time = settings_dict["Patches"]["patches_per_unit_time"]
-        patches_per_balanced_filter = settings_dict["Patches"]["patches_per_balanced_filter"]
         chosen_resolution = settings_dict["Patches"]["chosen_resolution"]
         if settings_dict["Patches"]["max_times_num_per_file"] is None: # NOTE: This is for the number of specific times alowed to be extraced from one set of files. NOT NUMBER OF PATCHES ALLOWED PER FILE
             max_times_num_per_file = np.inf
@@ -325,7 +324,7 @@ class Patcher:
         feature_patches = None
         label_patches = None
 
-        while np.any(np.array(filtered_balanced_counts) < number_of_patches_per_balanced_var - 1):
+        while np.any(np.array(filtered_balanced_counts) < number_of_patches_per_balanced_var):
             if main_loop_counter % 50 == 0:
                 print("Reached search number: " + str(main_loop_counter))
 
@@ -364,7 +363,7 @@ class Patcher:
 
             loaded_datasets, reproj_ds_index, x_dim_name, y_dim_name = self._load_datasets_from_disk(chosen_date_indeces, solution_indeces_files, solution_indeces_times, datasets_paths, data_settings_cfgs)
 
-            reproj_datasets, dataset_empty_or_out_of_range = self._reproject_datasets(loaded_datasets, reproj_ds_index)
+            reproj_datasets, dataset_empty_or_out_of_range = self._reproject_datasets(loaded_datasets, reproj_ds_index, data_settings_cfgs)
 
             # Increment index system for loop around (only relevant for multi-dataset case)
             if data_settings_cfgs[-1]["Data"]["use_internal_times_when_finding_files"]:
@@ -378,7 +377,7 @@ class Patcher:
                 warnings.warn('WARNING: At least one of the selected dataset files contained data that was entirely missing or data that did not spatially align with the other datasets. Continuing search...')
                 continue
 
-            all_patches, filtered_balanced_counts = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter, x_dim_name, y_dim_name)
+            all_patches, filtered_balanced_counts = self._make_patches(reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, number_of_patches_per_balanced_var, x_dim_name, y_dim_name)
 
             for single_dataset_patches in all_patches:
                 label_patch = None
@@ -492,7 +491,24 @@ class Patcher:
         return False, index_dict, flags_dict, counters_dict, all_found_datetimes_adjusted, all_found_time_indeces_adjusted
 
     
-    def _add_custom_vars(self, ds, data_settings_cfgs, current_ds_index):
+    def _add_custom_vars(self, ds, data_settings_cfgs, current_ds_index, post_reproj):
+        if post_reproj:
+            setting_name = "post_reproj_custom_vars"
+        else:
+            setting_name = "custom_vars"
+
+        for custom_var in data_settings_cfgs[current_ds_index]["Modification"][setting_name]:
+            return_dict = OrderedDict()
+            exec(custom_var, globals().update(locals()), return_dict)
+            return_list = list(return_dict.items())
+            var_name = return_list[-1][0]
+            values = return_list[-1][-1]
+            ds = ds.assign({var_name: values})
+
+        return ds
+
+    
+    def _select_specific_dims(self, ds, data_settings_cfgs, current_ds_index):
         for i, dim_selection_name in enumerate(data_settings_cfgs[current_ds_index]["Filtration"]["dim_selection_names"]):
             dim_selection_index = data_settings_cfgs[current_ds_index]["Filtration"]["dim_selection_index"][i]
             if type(dim_selection_index) == int:
@@ -502,15 +518,7 @@ class Patcher:
                 ds = ds[{dim_selection_name: random_index}]
             else:
                 raise Exception('Invalid input received for dim_selection_index setting. Must be int or "*".')
-
-        for custom_var in data_settings_cfgs[current_ds_index]["Modification"]["custom_vars"]:
-            return_dict = OrderedDict()
-            exec(custom_var, globals().update(locals()), return_dict)
-            return_list = list(return_dict.items())
-            var_name = return_list[-1][0]
-            values = return_list[-1][-1]
-            ds = ds.assign({var_name: values})
-
+        
         return ds
 
     
@@ -557,7 +565,8 @@ class Patcher:
             if data_settings_cfgs[i]["Data"]["reproj_target"]:
                 reproj_ds_index = i
 
-            ds = self._add_custom_vars(ds, data_settings_cfgs, i)
+            ds = self._select_specific_dims(ds, data_settings_cfgs, i)
+            ds = self._add_custom_vars(ds, data_settings_cfgs, i, False)
 
             loaded_datasets.append(ds)
 
@@ -567,12 +576,12 @@ class Patcher:
         return loaded_datasets, reproj_ds_index, x_dim_name, y_dim_name
 
 
-    def _reproject_datasets(self, loaded_datasets, reproj_ds_index):
+    def _reproject_datasets(self, loaded_datasets, reproj_ds_index, data_settings_cfgs):
         reproj_datasets = []
         dataset_empty_or_out_of_range = False
         reproj_target_ds = copy.deepcopy(loaded_datasets[reproj_ds_index])
 
-        for ds in loaded_datasets:
+        for i, ds in enumerate(loaded_datasets):
             # TODO: Maybe make the regridder algorithm a config setting?
             # TODO: Consider if reuse_weights:bool is useful here
             regridder = xe.Regridder(ds, reproj_target_ds, "bilinear", unmapped_to_nan=True)
@@ -586,6 +595,8 @@ class Patcher:
             if dataset_empty_or_out_of_range:
                 break
 
+            ds_reproj = self._add_custom_vars(ds_reproj, data_settings_cfgs, i, True)
+
             reproj_datasets.append(ds_reproj)
             ds.close()
         
@@ -594,7 +605,8 @@ class Patcher:
         return reproj_datasets, dataset_empty_or_out_of_range
 
 
-    # NOTE: This is a runtime bottleneck. Improve.
+    # TODO: This is a runtime bottleneck. Improve.
+    # TODO: ALSO MAKE SURE THE FILTERS DON"T ALLOW PATCHES THAT OVERLAP
     def _filter_patch_pixels(self, reproj_datasets, patch_size, grid_size, x_dim_name, y_dim_name, data_settings_cfgs, filtered_balanced_counts):
         vaid_pixels_bool = np.ones((grid_size[0],grid_size[1],len(filtered_balanced_counts)))
         filtered_balanced_pixels = []
@@ -603,7 +615,6 @@ class Patcher:
             for y in range(grid_size[1]):
                 filter_count_local = 0
                 for i, ds in enumerate(reproj_datasets):
-                    # TODO: Maybe close the patch with .close below?
                     patch = self._make_patch(ds, grid_size, patch_size, x, y, x_dim_name, y_dim_name)
                     if patch is None:
                         vaid_pixels_bool[x,y,:] = 0
@@ -627,6 +638,7 @@ class Patcher:
 
                     if failed_filter:
                         vaid_pixels_bool[x,y,:] = 0
+                        patch.close()
                         break
 
                     for j, filter in enumerate(data_settings_cfgs[i]["Filtration"]["filters_balanced"]):
@@ -636,20 +648,26 @@ class Patcher:
                         values = return_list[-1][-1]
                         if np.sum(values) < data_settings_cfgs[i]["Filtration"]["filter_patch_threshold_balanced"][j]:
                             vaid_pixels_bool[x,y,filter_count_local] = 0
-                            filter_count_local = filter_count_local + 1
+                        filter_count_local = filter_count_local + 1
+                    
+                    patch.close()
         
         for i in range(len(filtered_balanced_counts)):
             where_array = np.array(np.where(vaid_pixels_bool[:,:,i] == 1))
-            combined_lists_for_shuffle = list(zip(where_array[0], where_array[1]))
-            random.shuffle(combined_lists_for_shuffle)
-            where_array_x, where_array_y = zip(*combined_lists_for_shuffle)
-            where_array_x, where_array_y = np.array(where_array_x), np.array(where_array_y)
-            filtered_balanced_pixels.append(np.array([where_array_x, where_array_y])) # TODO: make sure the where can handle an empty case
+            # TODO: Check this np.size if statement with some tests because I don't fully trust it
+            if np.size(where_array):
+                combined_lists_for_shuffle = list(zip(where_array[0], where_array[1]))
+                random.shuffle(combined_lists_for_shuffle)
+                where_array_x, where_array_y = zip(*combined_lists_for_shuffle)
+                where_array_x, where_array_y = np.array(where_array_x), np.array(where_array_y)
+                filtered_balanced_pixels.append(np.array([where_array_x, where_array_y]))
+            else:
+                filtered_balanced_pixels.append(np.array([[], []]))
 
         return filtered_balanced_pixels
 
     
-    def _make_patches(self, reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, patches_per_balanced_filter, x_dim_name, y_dim_name):
+    def _make_patches(self, reproj_datasets, data_settings_cfgs, patches_per_time, patch_size, reproj_ds_index, filtered_balanced_counts, number_of_patches_per_balanced_var, x_dim_name, y_dim_name):
         reproj_ds = reproj_datasets[reproj_ds_index]
         x_max = reproj_ds.dims[x_dim_name]
         y_max = reproj_ds.dims[y_dim_name]
@@ -663,7 +681,7 @@ class Patcher:
             single_dataset_patches = []
             filter_balance_order = np.array(filtered_balanced_counts).argsort()
             for filter_balance_ind in filter_balance_order:
-                if filtered_balanced_counts[filter_balance_ind] < patches_per_balanced_filter and len(filtered_balanced_pixels[filter_balance_ind][0]) > 0 and pixel_counters[filter_balance_ind] < len(filtered_balanced_pixels[filter_balance_ind][0]):
+                if filtered_balanced_counts[filter_balance_ind] < number_of_patches_per_balanced_var and len(filtered_balanced_pixels[filter_balance_ind][0]) > 0 and pixel_counters[filter_balance_ind] < len(filtered_balanced_pixels[filter_balance_ind][0]):
                     x_i = filtered_balanced_pixels[filter_balance_ind][0][pixel_counters[filter_balance_ind]]
                     y_i = filtered_balanced_pixels[filter_balance_ind][1][pixel_counters[filter_balance_ind]]
                     
@@ -679,7 +697,7 @@ class Patcher:
             if len(single_dataset_patches) != 0:
                 all_patches.append(single_dataset_patches)
 
-        if np.sum(pixel_counters + 1) < patches_per_time:
+        if np.sum(pixel_counters) < patches_per_time:
             warnings.warn("While generating patches for a single timestep, the function _make_patches ran out of possible patches that meet the set filters' requirements. Continuing search...")
 
         for ds in reproj_datasets:
@@ -691,6 +709,7 @@ class Patcher:
     def _merge_patches(self, patches, patch):
         if patches is None:
             patches = copy.deepcopy(patch)
+            patch.close()
         else:
             patches = patches.merge(patch)
 
@@ -700,6 +719,7 @@ class Patcher:
     def _concat_patches(self, patches, patch):
         if patches is None:
             patches = copy.deepcopy(patch.expand_dims(dim='n_samples'))
+            patch.close()
         else:
             patches = xr.concat([patches,patch.expand_dims(dim='n_samples')],dim='n_samples')
 

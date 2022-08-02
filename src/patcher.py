@@ -16,7 +16,8 @@ from collections import OrderedDict
 
 # NOTE: netcdf4 also need to be manually installed as dependencies
 #       IMPORTANT: First thing to install on new env is xesmf/esmpy using the command conda install -c conda-forge xesmf esmpy=8.0.0
-#       this will install python as well. Second thing to install is cftime. Third thing is to install dask. Then see netcdf4 above
+#       this will install python as well. Second thing to install is cftime. Third thing is to install dask. Then see netcdf4 above.  
+#       tensorflow must also be version 2.7.0 or greater.
 
 # NOTE: Spatial dataset delineation in file/path naming not currently supported.
 
@@ -325,7 +326,7 @@ class Patcher:
         label_patches = None
 
         while np.any(np.array(filtered_balanced_counts) < number_of_patches_per_balanced_var):
-            if main_loop_counter % 50 == 0:
+            if main_loop_counter % 5 == 0:
                 print("Reached search number: " + str(main_loop_counter))
 
             if main_loop_counter == max_num_of_searches:

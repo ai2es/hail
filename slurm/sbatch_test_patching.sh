@@ -7,7 +7,7 @@
 # The %04a is translated into a 4-digit number that encodes the SLURM_ARRAY_TASK_ID
 #SBATCH --output=/scratch/tgschmidt/error_testing/slurm_output/out/test_patch_run_%04a_stdout.txt
 #SBATCH --error=/scratch/tgschmidt/error_testing/slurm_output/err/test_patch_run_%04a_stderr.txt
-#SBATCH --time=03:00:00
+#SBATCH --time=05:00:00
 #SBATCH --job-name=generate_patches
 #SBATCH --mail-user=tobias.schmidt@ou.edu
 #SBATCH --mail-type=ALL

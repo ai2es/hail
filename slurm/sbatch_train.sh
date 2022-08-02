@@ -20,6 +20,6 @@
 # $SLURM_ARRAY_TASK_ID
 # Used to use --exclusive tag
 
-/home/tgschmidt/sn_env/bin/python -u modeler_TEMP.py -t
+/home/tgschmidt/sn_env/bin/python -u modeler.py -t
 
 

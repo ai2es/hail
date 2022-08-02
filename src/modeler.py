@@ -122,7 +122,9 @@ def train(args):
 
     # Convert to xarray arrays. (Still maintains xarray's smart memory management)
     output_array = labels_ds.to_array()
+    labels_ds.close()
     input_array = features_ds.to_array()
+    features_ds.close()
 
     ####################### HOW THIS USED TO BE DONE ##########################
     # Format the ml input and output arrays so the unet reads them correctly
@@ -194,8 +196,7 @@ def train(args):
         model.summary()
 
         #train the model
-        # TODO: Make more settings here?
-        # TODO: use_multiprocessing and workers may not be relevent with the xarray dataarray system
+        # TODO: ensure validation_freq, batch_size, steps_per_epoch are all in settings.
         trained_model = model.fit(input_train, output_train, epochs=num_epochs, validation_freq=5, batch_size=50, steps_per_epoch=20, shuffle=False, 
                                 validation_data=(input_val, output_val), callbacks=[early_stopping, checkpoint], verbose=verbose)
 

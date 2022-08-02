@@ -17,6 +17,6 @@
 #################################################
 # $SLURM_ARRAY_TASK_ID
 
-/home/tgschmidt/sn_env/bin/python -u modeler_TEMP.py
+/home/tgschmidt/sn_env/bin/python -u modeler.py
 
 

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-#SBATCH --partition=normal
-#SBATCH --cpus-per-task=1
+#SBATCH --partition=ai2es
+#SBATCH --cpus-per-task=8
 # memory in MB
-#SBATCH --mem=8192
+#SBATCH --mem=40960
 # The %04a is translated into a 4-digit number that encodes the SLURM_ARRAY_TASK_ID
-#SBATCH --output=/home/tgschmidt/slurm_output/out/REU_predict_%04a_stdout.txt
-#SBATCH --error=/home/tgschmidt/slurm_output/err/REU_predict_%04a_stderr.txt
-#SBATCH --time=00:10:00
+#SBATCH --output=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/slurm_output/out/predict_%04a_stdout.txt
+#SBATCH --error=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/slurm_output/err/predict_%04a_stderr.txt
+#SBATCH --time=03:00:00
 #SBATCH --job-name=predict
 #SBATCH --mail-user=tobias.schmidt@ou.edu
 #SBATCH --mail-type=ALL
@@ -17,6 +17,6 @@
 #################################################
 # $SLURM_ARRAY_TASK_ID
 
-/home/tgschmidt/sn_env/bin/python -u modeler.py
+/home/tgschmidt/tf_gpu_env/bin/python -u modeler.py
 
 

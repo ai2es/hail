@@ -1,20 +1,15 @@
 #!/bin/bash
-
-#SBATCH --partition=normal
-#SBATCH --cpus-per-task=1
-# memory in MB
-#SBATCH --mem=4096
-# The %04a is translated into a 4-digit number that encodes the SLURM_ARRAY_TASK_ID
-#SBATCH --output=/home/tgschmidt/test_patch_run_%04a_stdout.txt
-#SBATCH --error=/home/tgschmidt/test_patch_run_%04a_stderr.txt
-#SBATCH --time=01:00:00
-#SBATCH --job-name=fix_patches
+#SBATCH -p debug
+#SBATCH --nodes=1
+#SBATCH -n 1
+#SBATCH --mem=16384
+#SBATCH --time=00:30:00
+#SBATCH --job-name="test_memleak"
 #SBATCH --mail-user=tobias.schmidt@ou.edu
 #SBATCH --mail-type=ALL
-#SBATCH --chdir=/home/tgschmidt/hail/src
-#SBATCH --array=0-0
-#
-#################################################
-/home/tgschmidt/sn_env/bin/python -u temp_categorizer.py
+#SBATCH --output=/scratch/tgschmidt/prep_data_%04a_stdout.txt
+#SBATCH --error=/scratch/tgschmidt/prep_data_%04a_stderr.txt
 
+#run the simple test
+/home/tgschmidt/tf_gpu_env/bin/python -u /home/tgschmidt/hail/src/temp_categorizer.py
 

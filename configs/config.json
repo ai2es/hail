@@ -1,1 +1,9 @@
-{}
+{"examples": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/test/examples/*",
+"labels": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/test/labels/*",
+"model_checkpoints": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_4_class_2022_08_09/saved_models",
+"single_checkpoint": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/saved_models/fold_0",
+"predictions_outfile": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/predictions/test_data/predictions.nc",
+"loss_func": "categorical_crossentropy",
+"metrics": ["categorical_accuracy"],
+"output_activation": "Softmax",
+"batch_size": 32}

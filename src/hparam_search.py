@@ -74,12 +74,12 @@ flags.DEFINE_integer(
 )
 
 # my params
-TF_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/train_val/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/saved_models/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/saved_models/checkpoints"
+TF_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train_val/tf_datasets/*"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/checkpoints"
 VAL_FRAC = 0.9 # Actually the train frac
 NUM_SAMPLES_IN_MEM = 16000
-INPUT_SHAPE = (64,64,16)
+INPUT_SHAPE = (64,64,15)
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 5
@@ -267,10 +267,10 @@ def run(data, base_logdir, session_id, hparams):
 
     checkpoint_path = os.path.join(CHECKPOINTS_DIR, session_id)
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
-                            monitor='val_loss', verbose=0, save_best_only=True, 
-                            save_weights_only=False, save_freq="epoch")
+                            monitor='val_max_csi', verbose=0, save_best_only=True, 
+                            save_weights_only=False, save_freq="epoch", mode="max")
     
-    callback_es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=PATIENCE)
+    callback_es = tf.keras.callbacks.EarlyStopping(monitor='val_max_csi', patience=PATIENCE, mode="max")
     
     #add images to board 
     print(model.summary())

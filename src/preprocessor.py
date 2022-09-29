@@ -14,14 +14,14 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Unet Preprocessing', fromfile_prefix_chars='@')
 
-    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/train_val/examples/*')
-    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/train_val/labels/*')
-    parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/train_val/tf_datasets')
-    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time_2022_08_09/patches/train_val/tf_datasets')
+    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/animations/20190501/unprocessed/examples/*')
+    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/animations/20190501/unprocessed/labels/*')
+    parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/animations/20190501/processed')
+    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/mins_maxs')
     parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', 'hailcast'])
     parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH95', 'MESH_class_bin_0'])
-    parser.add_argument('--approx_file_clumping_num', type=int, default=8)
-    parser.add_argument('--n_parallel_runs', type=int, default=15)
+    parser.add_argument('--approx_file_clumping_num', type=int, default=None) # Was 8
+    parser.add_argument('--n_parallel_runs', type=int, default=None) # Was 15
     parser.add_argument('--run_num', type=int, default=0)
     parser.add_argument('--save_as_netcdf', '-n', action='store_true')
 
@@ -62,57 +62,63 @@ if __name__ == "__main__":
     output_files = glob.glob(netcdf_labels_dir)
     output_files.sort()
 
-    one_input_ds = xr.open_dataset(input_files[0])
-    input_keys = list(one_input_ds.keys())
-    one_input_ds.close()
-    one_output_ds = xr.open_dataset(output_files[0])
-    output_keys = list(one_output_ds.keys())
-    one_output_ds.close()
+    if approx_file_clumping_num is not None:
+        input_files = np.array_split(np.array(input_files), len(input_files)//approx_file_clumping_num)
+        output_files = np.array_split(np.array(output_files), len(output_files)//approx_file_clumping_num)
 
-    input_files = np.array_split(np.array(input_files), len(input_files)//approx_file_clumping_num)
-    output_files = np.array_split(np.array(output_files), len(output_files)//approx_file_clumping_num)
-
-    # Split into chunks for each parallel run
-    input_files = np.array_split(np.array(input_files, dtype=object), n_parallel_runs)[run_num]
-    output_files = np.array_split(np.array(output_files, dtype=object), n_parallel_runs)[run_num]
+    if n_parallel_runs is not None:
+        # Split into chunks for each parallel run
+        input_files = np.array_split(np.array(input_files, dtype=object), n_parallel_runs)[run_num]
+        output_files = np.array_split(np.array(output_files, dtype=object), n_parallel_runs)[run_num]
 
     for i, (input_file_clump, output_file_clump) in enumerate(zip(input_files, output_files)):
         start_time = time.time()
         input_ds_list = []
         output_ds_list = []
-        for input_file, output_file in zip(input_file_clump, output_file_clump):
-            input_ds_list.append(xr.open_dataset(input_file))
-            output_ds_list.append(xr.open_dataset(output_file))
+        if approx_file_clumping_num is not None:
+            for input_file, output_file in zip(input_file_clump, output_file_clump):
+                input_ds_list.append(xr.open_dataset(input_file))
+                output_ds_list.append(xr.open_dataset(output_file))
 
-        # input_ds = xr.open_mfdataset(input_file_clump, concat_dim='n_samples', combine='nested', parallel=False, engine='netcdf4')
-        # output_ds = xr.open_mfdataset(output_file_clump, concat_dim='n_samples', combine='nested', parallel=False, engine='netcdf4')
+            # input_ds = xr.open_mfdataset(input_file_clump, concat_dim='n_samples', combine='nested', parallel=False, engine='netcdf4')
+            # output_ds = xr.open_mfdataset(output_file_clump, concat_dim='n_samples', combine='nested', parallel=False, engine='netcdf4')
 
-        input_ds = xr.concat(input_ds_list, dim="n_samples")
-        output_ds = xr.concat(output_ds_list, dim="n_samples")
+            # TODO: Investigate how xr.concat keeps decode_cf coordinates as data_vars instead of just coordinates so this causes problems for the dropping stuff below
+            input_ds = xr.concat(input_ds_list, dim="n_samples")
+            output_ds = xr.concat(output_ds_list, dim="n_samples")
 
-        for input_ds_old, output_ds_old in zip(input_ds_list, output_ds_list):
-            input_ds_old.close()
-            output_ds_old.close()
+            for input_ds_old, output_ds_old in zip(input_ds_list, output_ds_list):
+                input_ds_old.close()
+                output_ds_old.close()
+        else:
+            input_ds = xr.open_dataset(input_file_clump, decode_cf=False)
+            output_ds = xr.open_dataset(output_file_clump, decode_cf=False)
 
         example_maxs = xr.open_dataset(os.path.join(min_max_dir, "examples_max.nc"))
         example_mins = xr.open_dataset(os.path.join(min_max_dir, "examples_min.nc"))
         label_maxs = xr.open_dataset(os.path.join(min_max_dir, "labels_max.nc"))
         label_mins = xr.open_dataset(os.path.join(min_max_dir, "labels_min.nc"))
         output_ds = output_ds.drop(output_vars_to_drop)
-        label_maxs = label_maxs.drop(output_vars_to_drop)
-        label_mins = label_mins.drop(output_vars_to_drop)
+        # TODO: THE FOLLOWING NEEDS TO BE FIXED. HARDCODED TEMP. INCLUDING GETTING THE KEYS BELOW
+        label_maxs = label_maxs.drop(['MESH95', 'MESH_class_bin_0'])
+        print(label_maxs)
+        print(output_ds)
+        label_mins = label_mins.drop(['MESH95', 'MESH_class_bin_0'])
         input_ds = input_ds.drop(input_vars_to_drop)
-        example_maxs = example_maxs.drop(input_vars_to_drop)
-        example_mins = example_mins.drop(input_vars_to_drop)
+        example_maxs = example_maxs.drop(['hailcast'])
+        example_mins = example_mins.drop(['hailcast'])
+
+        input_keys = list(input_ds.keys())
+        output_keys = list(output_ds.keys())
 
         for key in input_keys:
-            input_ds[key] = min_max_norm(input_ds[key], example_mins[key], example_maxs[key])
+            input_ds[key] = (input_ds[key].dims, min_max_norm(input_ds[key], example_mins[key], example_maxs[key]).data)
         # for key in output_keys:
-        #     output_ds[key] = min_max_norm(output_ds[key], label_mins[key], label_maxs[key])
+        #     output_ds[key] = (output_ds[key].dims, min_max_norm(output_ds[key], label_mins[key], label_maxs[key]).data)
 
         if save_as_netcdf:
-            input_ds_name = str(run_num) + "-" + str(i) + "_examples.nc"
-            output_ds_name = str(run_num) + "-" + str(i) + "_labels.nc"
+            input_ds_name = "examples/" + str(run_num) + "-" + str(i) + ".nc"
+            output_ds_name = "labels/" + str(run_num) + "-" + str(i) + ".nc"
             input_ds.to_netcdf(os.path.join(output_ds_dir, input_ds_name))
             output_ds.to_netcdf(os.path.join(output_ds_dir, output_ds_name))
             output_ds.close()

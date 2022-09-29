@@ -8,7 +8,7 @@
 # The %04a is translated into a 4-digit number that encodes the SLURM_ARRAY_TASK_ID
 #SBATCH --output=/scratch/tgschmidt/tensorboard_stdout.txt
 #SBATCH --error=/scratch/tgschmidt/tensorboard_stderr.txt
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --job-name=tensorboard
 #SBATCH --mail-user=tobias.schmidt@ou.edu
 #SBATCH --mail-type=ALL

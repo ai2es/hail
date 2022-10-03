@@ -77,7 +77,7 @@ flags.DEFINE_integer(
 TF_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train_val/tf_datasets/*"
 H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/h5_models"
 CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/checkpoints"
-VAL_FRAC = 0.9 # Actually the train frac
+# VAL_FRAC = 0.9 # Actually the train frac
 NUM_SAMPLES_IN_MEM = 16000
 INPUT_SHAPE = (64,64,15)
 OUTPUT_CLASSES = 1
@@ -200,7 +200,7 @@ def model_fn(hparams, seed):
     )
     return model
 
-def prepare_data(tf_ds_dir_glob, val_frac):
+def prepare_data(tf_ds_dir_glob):
     """ Load data """
 
     #do this for both training and validations
@@ -221,9 +221,9 @@ def prepare_data(tf_ds_dir_glob, val_frac):
     tf_ds_files = glob.glob(tf_ds_dir_glob)
     tf_ds_files.sort()
 
-    val_set_index = int(val_frac*len(tf_ds_files))
-    tf_val_ds_files = tf_ds_files[val_set_index:]
-    tf_ds_files = tf_ds_files[:val_set_index]
+    # val_set_index = int(val_frac*len(tf_ds_files))
+    # tf_val_ds_files = tf_ds_files[val_set_index:]
+    # tf_ds_files = tf_ds_files[:val_set_index]
 
     complete_tf_ds = tf.data.experimental.load(tf_ds_files.pop(0))
     for tf_ds_file in tf_ds_files:
@@ -298,7 +298,7 @@ def run_all(logdir, verbose=False):
         directory should be empty or nonexistent.
       verbose: If true, print out each run's name as it begins.
     """
-    data = prepare_data(TF_DS_PATH_GLOB, VAL_FRAC)
+    data = prepare_data(TF_DS_PATH_GLOB)
     rng = random.Random(0)
 
     with tf.summary.create_file_writer(logdir).as_default():

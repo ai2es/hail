@@ -105,14 +105,8 @@ if __name__ == "__main__":
     example_files.sort()
 
     #open all the data in one xarray dataset
-    example_ds_list = []
-    label_ds_list = []
-    for input_file, output_file in zip(example_files, label_files):
-        example_ds_list.append(xr.open_dataset(input_file, decode_cf=False))
-        label_ds_list.append(xr.open_dataset(output_file, decode_cf=False))
-
-    examples_ds = xr.concat(example_ds_list, dim="n_samples")
-    labels_ds = xr.concat(label_ds_list, dim="n_samples")
+    examples_ds = xr.open_mfdataset(example_files, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)
+    labels_ds = xr.open_mfdataset(label_files, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)
 
     label_keys = list(labels_ds.keys())
     label_dims = list(labels_ds.dims)
@@ -125,7 +119,7 @@ if __name__ == "__main__":
     # examples_ds = examples_ds.drop(feature_vars_to_drop)
 
     # Convert to xarray arrays. (Still maintains xarray's smart memory management)
-    output_array = labels_ds.to_array()
+    # output_array = labels_ds.to_array()
     labels_ds.close()
     input_array = examples_ds.to_array()
     examples_ds.close()
@@ -133,10 +127,10 @@ if __name__ == "__main__":
     input_array = input_array.transpose("n_samples", ...)
     input_array = input_array.transpose(..., "variable")
 
-    output_array = output_array.transpose("n_samples", ...)
-    output_array = output_array.transpose(..., "variable")
+    # output_array = output_array.transpose("n_samples", ...)
+    # output_array = output_array.transpose(..., "variable")
 
-    output_array_np = output_array.to_numpy()
+    # output_array_np = output_array.to_numpy()
     input_array_np = input_array.to_numpy()
 
     #read in the unet

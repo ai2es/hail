@@ -3,7 +3,7 @@
 #SBATCH --partition=ai2es
 #SBATCH --cpus-per-task=8
 # memory in MB
-#SBATCH --mem=40960
+#SBATCH --mem=81920
 # The %04a is translated into a 4-digit number that encodes the SLURM_ARRAY_TASK_ID
 #SBATCH --output=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/slurm_output/out/predict_%04a_stdout.txt
 #SBATCH --error=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/slurm_output/err/predict_%04a_stderr.txt
@@ -17,6 +17,6 @@
 #################################################
 # $SLURM_ARRAY_TASK_ID
 
-/home/tgschmidt/tf_gpu_env/bin/python -u predictor.py
+/home/tgschmidt/sn_env/bin/python -u predictor.py
 
 

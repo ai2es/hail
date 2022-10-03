@@ -12,11 +12,11 @@ examples_files.sort()
 labels_files = glob.glob(LABELS_NETCDF_GLOB)
 labels_files.sort()
 
-one_examples_ds = xr.open_dataset(examples_files[0])
+one_examples_ds = xr.open_dataset(examples_files[0], decode_cf=False)
 example_keys = [key for key in one_examples_ds.keys()]
 one_examples_ds.close()
 
-one_labels_ds = xr.open_dataset(labels_files[0])
+one_labels_ds = xr.open_dataset(labels_files[0], decode_cf=False)
 label_keys = [key for key in one_labels_ds.keys()]
 one_labels_ds.close()
 
@@ -26,8 +26,8 @@ examples_min = np.full(len(example_keys), np.inf)
 labels_min = np.full(len(label_keys), np.inf)
 
 for j, (examples_file, labels_file) in enumerate(zip(examples_files, labels_files)):
-    examples_ds = xr.open_dataset(examples_file)
-    labels_ds = xr.open_dataset(labels_file)
+    examples_ds = xr.open_dataset(examples_file, decode_cf=False)
+    labels_ds = xr.open_dataset(labels_file, decode_cf=False)
 
     examples_array = examples_ds.to_array().to_numpy()
     labels_array = labels_ds.to_array().to_numpy()

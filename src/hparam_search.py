@@ -21,7 +21,7 @@ MNIST models.
 import py3nvml
 
 # Grab your prefered GPU
-py3nvml.grab_gpus(num_gpus=1, gpu_select=[2])
+py3nvml.grab_gpus(num_gpus=1, gpu_select=[1])
 
 import tensorflow as tf
 
@@ -58,7 +58,7 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_string(
     "logdir",
-    "/scratch/tgschmidt/temp_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -74,15 +74,16 @@ flags.DEFINE_integer(
 )
 
 # my params
-TF_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train_val/tf_datasets/*"
+TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/tf_datasets/*"
+TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/val/tf_datasets/*"
 H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/h5_models"
 CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/checkpoints"
 # VAL_FRAC = 0.9 # Actually the train frac
-NUM_SAMPLES_IN_MEM = 16000
+NUM_SAMPLES_IN_MEM = 22888
 INPUT_SHAPE = (64,64,15)
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
-VALIDATION_FREQ = 5
+VALIDATION_FREQ = 1
 # STEPS_PER_EPOCH = 20
 PATIENCE = 5
 # TF_DATASET_FILE_SAMPLE_NUM = 8000
@@ -99,7 +100,7 @@ HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam"]))
 HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy"])) 
 HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
 HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256,512]))
-HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([5000]))
+HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([512]))
 HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([1e-2,1e-3]))
 
 HPARAMS = [HP_CONV_LAYERS,
@@ -200,7 +201,7 @@ def model_fn(hparams, seed):
     )
     return model
 
-def prepare_data(tf_ds_dir_glob):
+def prepare_data(tf_ds_train_dir_glob, tf_ds_val_dir_glob):
     """ Load data """
 
     #do this for both training and validations
@@ -218,8 +219,10 @@ def prepare_data(tf_ds_dir_glob):
     # ds_val = tf.data.experimental.load('/scratch/randychase/updraft_validation2.tf',
     #                                     elem_spec)
 
-    tf_ds_files = glob.glob(tf_ds_dir_glob)
+    tf_ds_files = glob.glob(tf_ds_train_dir_glob)
     tf_ds_files.sort()
+    tf_val_ds_files = glob.glob(tf_ds_val_dir_glob)
+    tf_val_ds_files.sort()
 
     # val_set_index = int(val_frac*len(tf_ds_files))
     # tf_val_ds_files = tf_ds_files[val_set_index:]
@@ -252,7 +255,7 @@ def run(data, base_logdir, session_id, hparams):
     ds_train, ds_val = data
 
     #batch the training data accordingly
-    ds_train = ds_train.shuffle(NUM_SAMPLES_IN_MEM).repeat().batch(hparams[HP_BATCHSIZE]) #TODO: Remove .repeat?
+    ds_train = ds_train.shuffle(NUM_SAMPLES_IN_MEM).batch(hparams[HP_BATCHSIZE]) #TODO: Used to have .repeat between shuffle and batch
 
     #this batch is arbitrary, just needed so that you dont overwelm RAM. 
     ds_val = ds_val.batch(hparams[HP_VAL_BATCHSIZE])
@@ -268,9 +271,9 @@ def run(data, base_logdir, session_id, hparams):
     checkpoint_path = os.path.join(CHECKPOINTS_DIR, session_id)
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
                             monitor='val_max_csi', verbose=0, save_best_only=True, 
-                            save_weights_only=False, save_freq="epoch", mode="max")
+                            save_weights_only=False, save_freq='epoch', mode="max")
     
-    callback_es = tf.keras.callbacks.EarlyStopping(monitor='val_max_csi', patience=PATIENCE, mode="max")
+    callback_es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=PATIENCE, mode="min")
     
     #add images to board 
     print(model.summary())
@@ -280,7 +283,7 @@ def run(data, base_logdir, session_id, hparams):
         shuffle=False,
         validation_data=ds_val,
         validation_freq = VALIDATION_FREQ,
-        steps_per_epoch = NUM_SAMPLES_IN_MEM // hparams[HP_BATCHSIZE], 
+        # steps_per_epoch = NUM_SAMPLES_IN_MEM // hparams[HP_BATCHSIZE], # TODO: USED TO BE USED FOR THE LARGER DATASETS
         callbacks=[callback, hparams_callback, checkpoint_callback, callback_es],verbose=1)
 
     #save trained model, need to build path first 
@@ -298,7 +301,7 @@ def run_all(logdir, verbose=False):
         directory should be empty or nonexistent.
       verbose: If true, print out each run's name as it begins.
     """
-    data = prepare_data(TF_DS_PATH_GLOB)
+    data = prepare_data(TF_TRAIN_DS_PATH_GLOB, TF_VAL_DS_PATH_GLOB)
     rng = random.Random(0)
 
     with tf.summary.create_file_writer(logdir).as_default():

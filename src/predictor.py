@@ -111,6 +111,9 @@ if __name__ == "__main__":
     label_keys = list(labels_ds.keys())
     label_dims = list(labels_ds.dims)
 
+    if "hailcast" in examples_ds.keys():
+        examples_ds = examples_ds.drop("hailcast")
+
     # lats = examples_ds["lat"].to_numpy()
     # lons = examples_ds["lon"].to_numpy()
     # comp_dz = examples_ds["comp_dz"].to_numpy()

@@ -15,6 +15,6 @@
 #SBATCH --array=0-0
 #
 #################################################
-/home/tgschmidt/tf_gpu_env/bin/tensorboard --logdir="/scratch/tgschmidt/temp_logdir" --port=6069 --bind_all
+/home/tgschmidt/tf_gpu_env/bin/tensorboard --logdir="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/tensorboard_logdir" --port=6069 --bind_all
 
 

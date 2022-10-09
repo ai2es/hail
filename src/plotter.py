@@ -266,7 +266,7 @@ def plot_test_data_plots(args):
     # truths_path = args["truths_path"]
     # class_names = args["class_names"]
     plot_output_dir = args["plot_output_dir"]
-    hail_name = "MESH_class_bin_1"
+    hail_name = "MESH_class_bin"
     lead_time_names = ["init_plus_00", "init_plus_15", "init_plus_30", "init_plus_45", "init_plus_60"]
     lead_time_names_pretty = ["Init Plus 00", "Init Plus 15", "Init Plus 30", "Init Plus 45", "Init Plus 60"]
 
@@ -313,10 +313,10 @@ def plot_test_data_plots(args):
     labels_datasets = []
     predictions_datasets = []
     for lead_time_name in lead_time_names:
-        examples_list = glob.glob(os.path.join(test_data_dir, lead_time_name + "/unprocessed/examples/*"))
+        examples_list = glob.glob(os.path.join(test_data_dir, lead_time_name + "/processed/examples/*"))
         examples_list.sort()
         examples_datasets.append(xr.open_mfdataset(examples_list, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)) #TODO: REMOVE decode_cf when possible
-        labels_list = glob.glob(os.path.join(test_data_dir, lead_time_name + "/unprocessed/labels/*"))
+        labels_list = glob.glob(os.path.join(test_data_dir, lead_time_name + "/processed/labels/*"))
         labels_list.sort()
         labels_datasets.append(xr.open_mfdataset(labels_list, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)) #TODO: REMOVE decode_cf when possible
         predictions_datasets.append(xr.open_dataset(os.path.join(test_data_dir, lead_time_name + "/predictions/y_hats_old.nc"), decode_cf=False))
@@ -333,12 +333,13 @@ def plot_test_data_plots(args):
     for example_ds, labels_ds, pred_ds in zip(examples_datasets, labels_datasets, predictions_datasets):
         truths_flattened.append(labels_ds[hail_name].to_numpy().ravel())
         predictions_flattened.append(pred_ds[hail_name].to_numpy().ravel())
-        hailcast = example_ds["hailcast"].to_numpy().ravel()
-        hailcast = hailcast / 0.393701
-        hailcast[np.nonzero(hailcast > 1)] = 1
+        hailcast_flattened.append(example_ds['hailcast'].to_numpy().ravel())
+        # hailcast = example_ds["hailcast"].to_numpy().ravel()
+        # hailcast = hailcast / 0.393701
+        # hailcast[np.nonzero(hailcast > 1)] = 1
         # hailcast_class = np.zeros(len(hailcast), dtype=np.int64)
         # hailcast_class[np.nonzero(hailcast > 0.393701)] = 1
-        hailcast_flattened.append(hailcast) # Was hailcast_class in append
+        # hailcast_flattened.append(hailcast) # Was hailcast_class in append
     # for i in range(predictions.shape[0]):
     #     truths_flattened.append(truths[i,...].ravel())
     #     predictions_flattened.append(predictions[i,...].ravel())

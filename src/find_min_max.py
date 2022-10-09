@@ -3,8 +3,8 @@ import numpy as np
 import glob
 import os
 
-EXAMPLES_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train_val/examples/*"
-LABELS_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train_val/labels/*"
+EXAMPLES_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/examples/*"
+LABELS_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/labels/*"
 MIN_MAX_FILES_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/mins_maxs"
 
 examples_files = glob.glob(EXAMPLES_NETCDF_GLOB)

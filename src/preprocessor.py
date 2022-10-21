@@ -14,21 +14,24 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Unet Preprocessing', fromfile_prefix_chars='@')
 
-    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/examples/*')
-    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/labels/*')
-    parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/tf_datasets')
+    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_60/unprocessed/examples/*')
+    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_60/unprocessed/labels/*')
+    parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_60/processed')
     parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/mins_maxs')
-    parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', 'hailcast'])
+    parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat']) # Use to have hailcast
     parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH95'])
     parser.add_argument('--approx_file_clumping_num', type=int, default=None) # Was 8
     parser.add_argument('--n_parallel_runs', type=int, default=None) # Was 15
     parser.add_argument('--run_num', type=int, default=0)
-    parser.add_argument('--ne_dim_num', type=int, default=3) # TODO: Maybe wrong?
+    parser.add_argument('--ne_dim_num', type=int, default=1)
     parser.add_argument('--ne_dim_size', type=int, default=18)
     parser.add_argument('--hailcast_threshold', type=float, default=0.393701)
-    parser.add_argument('--save_as_netcdf', '-n', action='store_true')
+    parser.add_argument('--save_as_netcdf', '-s', action='store_true')
     parser.add_argument('--has_ne_dim', '-d', action='store_true')
     parser.add_argument('--min_max_normalize', '-m', action='store_true')
+    parser.add_argument('--normalize_hailcast', '-n', action='store_true')
+    parser.add_argument('--make_hailcast_probabilistic', '-p', action='store_true')
+    parser.add_argument('--remove_patches_with_nans', '-r', action='store_true')
 
     return parser
 
@@ -50,7 +53,8 @@ def make_hailcast_probabilistic(hailcast, threshold, ne_dim_num, ne_dim_size):
     hailcast_class[np.nonzero(hailcast > threshold)] = 1
 
     hailcast_prob = np.sum(hailcast_class, axis=ne_dim_num)/ne_dim_size
-    hailcast_prob = np.repeat(hailcast_prob[...,np.newaxis], ne_dim_size, axis=-1) # TODO: This may move the ne_dim if it is not on the end!!!
+    hailcast_prob = np.expand_dims(hailcast_prob, axis=ne_dim_num)
+    hailcast_prob = np.repeat(hailcast_prob, ne_dim_size, axis=ne_dim_num) # TODO: Investigate if this breaks order
 
     return hailcast_prob
 
@@ -63,12 +67,13 @@ def unpack_ne_dim_input(variable, ne_dim_num):
     return np.reshape(variable, tuple(variable_shape_adjusted))
 
 
-def unpack_ne_dim_output(variable, ne_dim_size):
-    variable_repeated = np.repeat(variable[...,np.newaxis], ne_dim_size, axis=-1) # TODO: This may move the ne_dim if it is not on the end!!!
-    variable_shape_adjusted = variable.shape
+def unpack_ne_dim_output(variable, ne_dim_size, ne_dim_num):
+    variable_shape_adjusted = list(variable.shape)
+    variable = np.expand_dims(variable, axis=ne_dim_num)
+    variable_repeated = np.repeat(variable, ne_dim_size, axis=ne_dim_num) # TODO: Investigate if this breaks order
     variable_shape_adjusted[0] = variable_shape_adjusted[0] * ne_dim_size
 
-    return np.reshape(variable_repeated, variable_shape_adjusted)
+    return np.reshape(variable_repeated, tuple(variable_shape_adjusted))
 
 
 if __name__ == "__main__":
@@ -92,6 +97,9 @@ if __name__ == "__main__":
     hailcast_threshold = args["hailcast_threshold"]
     has_ne_dim = args["has_ne_dim"]
     min_max_normalize = args["min_max_normalize"]
+    normalize_hailcast = args["normalize_hailcast"]
+    make_hailcast_probabilistic_bool = args["make_hailcast_probabilistic"]
+    remove_patches_with_nans = args["remove_patches_with_nans"]
 
     input_files = glob.glob(netcdf_examples_dir)
     input_files.sort()
@@ -133,21 +141,47 @@ if __name__ == "__main__":
         input_keys = list(input_ds.keys())
         output_keys = list(output_ds.keys())
         
-        if "hailcast" in input_keys and has_ne_dim:
-            input_ds["hailcast"] = (input_ds["hailcast"].dims, make_hailcast_probabilistic(input_ds["hailcast"], hailcast_threshold, ne_dim_num, ne_dim_size).data)
+        if "hailcast" in input_keys and has_ne_dim and make_hailcast_probabilistic_bool:
+            input_ds["hailcast"] = (input_ds["hailcast"].dims, make_hailcast_probabilistic(input_ds["hailcast"].data, hailcast_threshold, ne_dim_num, ne_dim_size))
 
         if has_ne_dim:
+            # Because we have to reshape dimensions
+            new_input_ds = xr.Dataset()
+            new_output_ds = xr.Dataset()
+
             for key in output_keys:
-                output_ds[key] = (output_ds[key].dims, unpack_ne_dim_output(output_ds[key], ne_dim_num).data)
+                new_output_ds = new_output_ds.assign({key: (output_ds[key].dims, unpack_ne_dim_output(output_ds[key].data, ne_dim_size, ne_dim_num))})
+            output_ds.close()
+            output_ds = new_output_ds
 
-        for key in input_keys:
-            if has_ne_dim:
-                new_dim = tuple(list(input_ds[key].dims).pop(ne_dim_num))
-                input_ds[key] = (new_dim, unpack_ne_dim_input(input_ds[key], ne_dim_num).data)
+            for key in input_keys:
+                new_dim = list(input_ds[key].dims)
+                new_dim.pop(ne_dim_num)
+                new_dim = tuple(new_dim)
+                new_input_ds = new_input_ds.assign({key: (new_dim, unpack_ne_dim_input(input_ds[key].data, ne_dim_num))})
+            input_ds.close()
+            input_ds = new_input_ds
 
-            if key != "hailcast" and min_max_normalize:
-                input_ds[key] = (input_ds[key].dims, min_max_norm(input_ds[key], example_mins[key], example_maxs[key]).data)
+        if min_max_normalize:
+            for key in input_keys:
+                if key == "hailcast" and not normalize_hailcast:
+                    continue
+                input_ds[key] = (input_ds[key].dims, min_max_norm(input_ds[key].data, example_mins[key].data, example_maxs[key].data))
 
+        if remove_patches_with_nans:
+            merged_ds = xr.merge([input_ds, output_ds])
+            merged_array = merged_ds.to_array()
+            merged_ds.close()
+            merged_array = merged_array.transpose("n_samples", ...)
+            merged_np = merged_array.to_numpy()
+            merged_array.close()
+
+            indeces_of_nans = np.isnan(merged_np)
+            patches_with_no_nans = np.nonzero(np.any(indeces_of_nans, axis=tuple(np.arange(1,len(merged_np.shape)))) == 0)
+
+            input_ds = input_ds[{"n_samples": patches_with_no_nans[0]}]
+            output_ds = output_ds[{"n_samples": patches_with_no_nans[0]}]
+                
         if save_as_netcdf:
             input_ds_name = "examples/" + file_name_num + ".nc"
             output_ds_name = "labels/" + file_name_num + ".nc"

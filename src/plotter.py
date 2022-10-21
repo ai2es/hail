@@ -1,3 +1,4 @@
+from matplotlib import markers
 import xarray as xr
 import argparse
 from sklearn.metrics import roc_auc_score, roc_curve
@@ -261,52 +262,12 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, init_date
 
 # NOTE: This is only for binary case
 def plot_test_data_plots(args):
-    # predictions_path = args["predictions_path"]
     test_data_dir = args["test_data_dir"]
-    # truths_path = args["truths_path"]
-    # class_names = args["class_names"]
     plot_output_dir = args["plot_output_dir"]
     hail_name = "MESH_class_bin"
     lead_time_names = ["init_plus_00", "init_plus_15", "init_plus_30", "init_plus_45", "init_plus_60"]
     lead_time_names_pretty = ["Init Plus 00", "Init Plus 15", "Init Plus 30", "Init Plus 45", "Init Plus 60"]
-
-    # # TEMP!!!!!!
-    # derp = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_00/unprocessed/labels/*")
-    # derp.sort()
-    # truth = xr.open_mfdataset(derp, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)[hail_name]
-    # # truth = truth.transpose("n_samples", ...)
-    # truth = truth.to_numpy().ravel()
-    # # print(xr.open_mfdataset(derp, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False))
-    # # print(xr.open_dataset("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_00/predictions/y_hats_old.nc", decode_cf=False))
-    # prediction = xr.open_dataset("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_00/predictions/y_hats_old.nc", decode_cf=False)[hail_name].to_numpy().ravel()
-    # derp = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_00/unprocessed/examples/*")
-    # derp.sort()
-    # hailcast = xr.open_mfdataset(derp, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)['hailcast']
-    # hailcast = hailcast.to_numpy().ravel()
-    # hailcast_class = np.zeros(len(hailcast), dtype=np.int64)
-    # hailcast_class[np.nonzero(hailcast > 0.393701)] = 1
-    # hailcast = hailcast / 0.393701
-    # hailcast[np.nonzero(hailcast > 1)] = 1
-    # # print(np.sum(hailcast_class))
-    # # print(np.sum(truth))
-    # bin_acc = MaxCriticalSuccessIndex()
-    # # bin_acc = tf.keras.metrics.BinaryAccuracy()
-    # bin_acc.update_state(truth, prediction)
-    # print(bin_acc.result().numpy())
-    # bin_acc.reset_state()
-    # bin_acc.update_state(truth, hailcast)
-    # print(bin_acc.result().numpy())
-    # # prediction[np.nonzero(prediction < 0.1)] = 0
-    # print(np.max(prediction))
-    # # print(np.min(truth))
-    # # prediction = np.ones(len(truth))
-    # fpr, tpr = calibration_curve(truth, prediction, n_bins=100)
-    # plt.plot([0,1], linestyle='--', label="dumb")
-    # plt.plot(tpr, fpr, linestyle='-', label="ML Hail init_time_00")
-    # fpr, tpr = calibration_curve(truth, hailcast, n_bins=100)
-    # plt.plot(tpr, fpr, linestyle='-.', label="Hailcast init_time_00", color=plt.gca().lines[-1].get_color())
-    # plt.legend()
-    # plt.savefig(os.path.join(plot_output_dir, 'Reliability_Diagram.png'))
+    lead_time_minutes = [0, 15, 30, 45, 60]
 
     # Load all datasets for each of the valid times (see lead_time_names above)
     examples_datasets = []
@@ -319,36 +280,33 @@ def plot_test_data_plots(args):
         labels_list = glob.glob(os.path.join(test_data_dir, lead_time_name + "/processed/labels/*"))
         labels_list.sort()
         labels_datasets.append(xr.open_mfdataset(labels_list, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)) #TODO: REMOVE decode_cf when possible
-        predictions_datasets.append(xr.open_dataset(os.path.join(test_data_dir, lead_time_name + "/predictions/y_hats_old.nc"), decode_cf=False))
-
-    # # Assumes that predictions and truths have the same number of classes (features)
-    # predictions = xr.open_dataset(predictions_path, decode_cf=False) #.to_array().to_numpy()
-    # # truths = xr.open_dataset(truths_path).to_array().to_numpy()
-    # ds_labels = xr.open_mfdataset(unprocessed_labels, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False) #TODO: REMOVE decode_cf when possible
+        predictions_datasets.append(xr.open_dataset(os.path.join(test_data_dir, lead_time_name + "/predictions/y_hats.nc"), decode_cf=False))
+        print(predictions_datasets[-1].dims)
 
     # Covert the numpy arrays into pixel-by-pixel comparison
     truths_flattened = []
     predictions_flattened = []
     hailcast_flattened = []
     for example_ds, labels_ds, pred_ds in zip(examples_datasets, labels_datasets, predictions_datasets):
-        truths_flattened.append(labels_ds[hail_name].to_numpy().ravel())
-        predictions_flattened.append(pred_ds[hail_name].to_numpy().ravel())
-        hailcast_flattened.append(example_ds['hailcast'].to_numpy().ravel())
-        # hailcast = example_ds["hailcast"].to_numpy().ravel()
-        # hailcast = hailcast / 0.393701
-        # hailcast[np.nonzero(hailcast > 1)] = 1
-        # hailcast_class = np.zeros(len(hailcast), dtype=np.int64)
-        # hailcast_class[np.nonzero(hailcast > 0.393701)] = 1
-        # hailcast_flattened.append(hailcast) # Was hailcast_class in append
-    # for i in range(predictions.shape[0]):
-    #     truths_flattened.append(truths[i,...].ravel())
-    #     predictions_flattened.append(predictions[i,...].ravel())
+        truth = labels_ds[hail_name].to_numpy().ravel()
+        pred = pred_ds[hail_name].to_numpy().ravel()
+        hailcast = example_ds['hailcast'].to_numpy().ravel()
+
+        truths_flattened.append(truth)
+        predictions_flattened.append(pred)
+        hailcast_flattened.append(hailcast)
+
+        example_ds.close()
+        labels_ds.close()
+        pred_ds.close()
 
     # Calculate various ROC values
     roc_auc_scores = []
     roc_auc_scores_hailcast = []
     roc_curves = []
     roc_curves_hailcast = []
+    max_csis = []
+    max_csis_hailcast = []
     for truth, prediction, hailcast in zip(truths_flattened, predictions_flattened, hailcast_flattened):
         roc_auc_scores.append(roc_auc_score(truth, prediction))
         roc_auc_scores_hailcast.append(roc_auc_score(truth, hailcast))
@@ -356,6 +314,26 @@ def plot_test_data_plots(args):
         roc_curves.append((fpr, tpr))
         fpr, tpr, thresholds = roc_curve(truth, hailcast)
         roc_curves_hailcast.append((fpr, tpr))
+
+        max_csi_metric = MaxCriticalSuccessIndex()
+        max_csi_metric.update_state(truth, prediction)
+        max_csis.append(max_csi_metric.result().numpy())
+        max_csi_metric = MaxCriticalSuccessIndex()
+        max_csi_metric.reset_state()
+        max_csi_metric.update_state(truth, hailcast)
+        max_csis_hailcast.append(max_csi_metric.result().numpy())
+
+    # Make the max CSI plot
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    plt.plot(lead_time_minutes, max_csis, linestyle='-', label="ML Hail", marker='o')
+    plt.plot(lead_time_minutes, max_csis_hailcast, linestyle='-', label="Hailcast", marker='o')
+    plt.ylabel('Max CSI')
+    plt.xlabel('Lead Time (mins)')
+    plt.title('Max CSI With Lead Time')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_output_dir, 'max_csi.png'))
 
     # Make the ROC plot
     fig = plt.figure()

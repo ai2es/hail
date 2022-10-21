@@ -1,4 +1,4 @@
 {"examples": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_60/processed/examples/*",
 "labels": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_60/processed/labels/*",
-"single_checkpoint": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/old/fold_0",
+"single_checkpoint": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/checkpoints/25",
 "predictions_outfile": "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test/init_plus_60/predictions/y_hats.nc"}

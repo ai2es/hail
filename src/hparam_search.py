@@ -58,7 +58,7 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_string(
     "logdir",
-    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/tensorboard_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/unet_3plus/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -76,8 +76,8 @@ flags.DEFINE_integer(
 # my params
 TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/tf_datasets/*"
 TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/val/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/checkpoints"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/unet_3plus/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/unet_3plus/checkpoints"
 # VAL_FRAC = 0.9 # Actually the train frac
 NUM_SAMPLES_IN_MEM = 22888
 INPUT_SHAPE = (64,64,15)
@@ -95,7 +95,7 @@ HP_CONV_ACTIVATION = hp.HParam("conv_activation", hp.Discrete(['LeakyReLU']))
 HP_CONV_KERNELS = hp.HParam('num_of_kernels', hp.Discrete([4,8,16,32]))
 
 #unet param
-HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([1,2,3,4]))
+HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([3,4,5]))
 HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam"]))
 HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy"])) 
 HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
@@ -185,7 +185,7 @@ def model_fn(hparams, seed):
     for i in np.arange(1,hparams[HP_UNET_DEPTH]+1,1):
         kernel_list.append(hparams[HP_CONV_KERNELS]*i)
 
-    model = models.unet_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+    model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
                       stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
                       activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
                       batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')

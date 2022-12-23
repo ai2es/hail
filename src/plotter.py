@@ -14,9 +14,8 @@ import cartopy.io.img_tiles as cimgt
 import numpy as np
 import glob
 from datetime import datetime, timedelta
-# TEMP!!!!!!!!
-import tensorflow as tf
 from custom_metrics import MaxCriticalSuccessIndex
+from preprocessor import unpack_ne_dim_output
 
 def create_parser():
     '''
@@ -25,13 +24,13 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Unet Preprocessing', fromfile_prefix_chars='@')
 
-    parser.add_argument('--predictions_path', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/animations/20190501/predictions/y_hats.nc')
-    parser.add_argument('--unprocessed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/animations/20190501/unprocessed/examples/*')
-    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/animations/20190501/unprocessed/labels/*')
-    parser.add_argument('--test_data_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test')
+    parser.add_argument('--predictions_path', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed/patches/test/init_plus_00/predictions/y_hats.nc')
+    parser.add_argument('--processed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/processed/examples/*')
+    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/unprocessed/labels/*')
+    # parser.add_argument('--test_data_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/test')
     # parser.add_argument('--truths_path', type=str, default='/Users/tschmidt/repos/hail/data/predictions/no_refl_trained_at_init_time_2022_08_03/y_hats.nc')
     # parser.add_argument('--other_features_path', type=str, default='/Users/tschmidt/repos/hail/data/predictions/no_refl_trained_at_init_time_2022_08_03/y_hats.nc')
-    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/images/test_dataset_plots')
+    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/images/test_dataset_plots')
     parser.add_argument('--init_datetime', type=str, default='2019-05-01:1900')
     # parser.add_argument('--class_names', type=str, nargs='+', default=['Hail'])
     parser.add_argument('--ens_member', type=int, default=1)
@@ -262,71 +261,109 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, init_date
 
 # NOTE: This is only for binary case
 def plot_test_data_plots(args):
-    test_data_dir = args["test_data_dir"]
+    examples_glob = args["processed_examples"]
+    labels_glob = args["unprocessed_labels"]
     plot_output_dir = args["plot_output_dir"]
+    # predictions_paths = args["predictions_paths"]
+    predictions_paths = [["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/predictions/y_hats_00.nc",
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/predictions/y_hats_15.nc",
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/predictions/y_hats_30.nc",
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/predictions/y_hats_45.nc",
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/predictions/y_hats_55.nc"]]
+    model_names = ["Multi-Model"]
     hail_name = "MESH_class_bin"
-    lead_time_names = ["init_plus_00", "init_plus_15", "init_plus_30", "init_plus_45", "init_plus_60"]
     lead_time_names_pretty = ["Init Plus 00", "Init Plus 15", "Init Plus 30", "Init Plus 45", "Init Plus 60"]
     lead_time_minutes = [0, 15, 30, 45, 60]
+    lead_time_indices = [0, 3, 6, 9, 11]
 
-    # Load all datasets for each of the valid times (see lead_time_names above)
-    examples_datasets = []
-    labels_datasets = []
-    predictions_datasets = []
-    for lead_time_name in lead_time_names:
-        examples_list = glob.glob(os.path.join(test_data_dir, lead_time_name + "/processed/examples/*"))
-        examples_list.sort()
-        examples_datasets.append(xr.open_mfdataset(examples_list, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)) #TODO: REMOVE decode_cf when possible
-        labels_list = glob.glob(os.path.join(test_data_dir, lead_time_name + "/processed/labels/*"))
-        labels_list.sort()
-        labels_datasets.append(xr.open_mfdataset(labels_list, concat_dim='n_samples', combine='nested', engine='netcdf4', decode_cf=False)) #TODO: REMOVE decode_cf when possible
-        predictions_datasets.append(xr.open_dataset(os.path.join(test_data_dir, lead_time_name + "/predictions/y_hats.nc"), decode_cf=False))
-        print(predictions_datasets[-1].dims)
+    # Load all the xarray dataset objects
+    examples_list = glob.glob(examples_glob)
+    examples_list.sort()
+    examples_dataset = xr.open_mfdataset(examples_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
+    labels_list = glob.glob(labels_glob)
+    labels_list.sort()
+    labels_dataset = xr.open_mfdataset(labels_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
 
-    # Covert the numpy arrays into pixel-by-pixel comparison
+    labels_dataset = labels_dataset.transpose("n_samples", "lat_dim", "lon_dim", "time_dim")
+
+    # Load predictions and truths for each of the valid times
     truths_flattened = []
     predictions_flattened = []
+    for predictions_path in predictions_paths:
+        predictions = []
+        truths = []
+
+        for i, lead_time_index in enumerate(lead_time_indices):
+            if type(predictions_path) is list:
+                predictions.append(xr.open_dataset(predictions_path[i])[hail_name].to_numpy().ravel())
+            else:
+                predictions.append(xr.open_dataset(predictions_path)[{"time_dim": lead_time_index}][hail_name].to_numpy().ravel())
+            
+            truth = unpack_ne_dim_output(labels_dataset[{"time_dim": lead_time_index}][hail_name].to_numpy(), 18, 1).ravel()
+            truths.append(truth)
+        
+        truths_flattened.append(truths)
+        predictions_flattened.append(predictions)
+
+    # Load a hailcast list
     hailcast_flattened = []
-    for example_ds, labels_ds, pred_ds in zip(examples_datasets, labels_datasets, predictions_datasets):
-        truth = labels_ds[hail_name].to_numpy().ravel()
-        pred = pred_ds[hail_name].to_numpy().ravel()
-        hailcast = example_ds['hailcast'].to_numpy().ravel()
+    for lead_time_index in lead_time_indices:
+        hailcast_flattened.append(examples_dataset[{"time_dim": lead_time_index}]['hailcast'].to_numpy().ravel())
 
-        truths_flattened.append(truth)
-        predictions_flattened.append(pred)
-        hailcast_flattened.append(hailcast)
-
-        example_ds.close()
-        labels_ds.close()
-        pred_ds.close()
-
-    # Calculate various ROC values
+    # Calculate max csi, calibration, and ROC for model data
     roc_auc_scores = []
-    roc_auc_scores_hailcast = []
     roc_curves = []
-    roc_curves_hailcast = []
     max_csis = []
+    calibration_curves = []
+    for truths, predictions in zip(truths_flattened, predictions_flattened):
+        roc_auc_score_one_model = []
+        roc_curve_one_model = []
+        max_csi_one_model = []
+        calibration_curve_one_model = []
+        
+        for truth, prediction in zip(truths, predictions):
+            roc_auc_score_one_model.append(roc_auc_score(truth, prediction))
+
+            fpr, tpr, thresholds = roc_curve(truth, prediction)
+            roc_curve_one_model.append((fpr, tpr))
+
+            max_csi_metric = MaxCriticalSuccessIndex()
+            max_csi_metric.reset_state()
+            max_csi_metric.update_state(truth, prediction)
+            max_csi_one_model.append(max_csi_metric.result().numpy())
+
+            prob_true, prob_pred = calibration_curve(truth, prediction, n_bins=100)
+            calibration_curve_one_model.append((prob_pred, prob_true))
+
+        roc_auc_scores.append(roc_auc_score_one_model)
+        roc_curves.append(roc_curve_one_model)
+        max_csis.append(max_csi_one_model)
+        calibration_curves.append(calibration_curve_one_model)
+
+    # Calculate max csi, calibration, and ROC for hailcast
+    roc_auc_scores_hailcast = []
+    roc_curves_hailcast = []
     max_csis_hailcast = []
-    for truth, prediction, hailcast in zip(truths_flattened, predictions_flattened, hailcast_flattened):
-        roc_auc_scores.append(roc_auc_score(truth, prediction))
+    calibration_curves_hailcast = []
+    for truth, hailcast in zip(truths_flattened[-1], hailcast_flattened):
         roc_auc_scores_hailcast.append(roc_auc_score(truth, hailcast))
-        fpr, tpr, thresholds = roc_curve(truth, prediction)
-        roc_curves.append((fpr, tpr))
+
         fpr, tpr, thresholds = roc_curve(truth, hailcast)
         roc_curves_hailcast.append((fpr, tpr))
 
-        max_csi_metric = MaxCriticalSuccessIndex()
-        max_csi_metric.update_state(truth, prediction)
-        max_csis.append(max_csi_metric.result().numpy())
         max_csi_metric = MaxCriticalSuccessIndex()
         max_csi_metric.reset_state()
         max_csi_metric.update_state(truth, hailcast)
         max_csis_hailcast.append(max_csi_metric.result().numpy())
 
+        prob_true, prob_pred = calibration_curve(truth, hailcast, n_bins=100)
+        calibration_curves_hailcast.append((prob_pred, prob_true))
+
     # Make the max CSI plot
     fig = plt.figure()
     fig.patch.set_facecolor('white')
-    plt.plot(lead_time_minutes, max_csis, linestyle='-', label="ML Hail", marker='o')
+    for i, max_csi in enumerate(max_csis):
+        plt.plot(lead_time_minutes, max_csi, linestyle='-', label=model_names[i], marker='o')
     plt.plot(lead_time_minutes, max_csis_hailcast, linestyle='-', label="Hailcast", marker='o')
     plt.ylabel('Max CSI')
     plt.xlabel('Lead Time (mins)')
@@ -335,42 +372,33 @@ def plot_test_data_plots(args):
     plt.tight_layout()
     plt.savefig(os.path.join(plot_output_dir, 'max_csi.png'))
 
-    # Make the ROC plot
-    fig = plt.figure()
-    fig.patch.set_facecolor('white')
-    plt.plot([0,1], [0,1], linestyle='--', label='No Skill: AUC=%.3f' % (0.5))
-    for roc_auc_score_value, roc_auc_score_hailcast_value, roc_curve_value, roc_curve_hailcast_value, lead_time_name in zip(roc_auc_scores, roc_auc_scores_hailcast, roc_curves, roc_curves_hailcast, lead_time_names_pretty):
-        plt.plot(roc_curve_value[0], roc_curve_value[1], linestyle='-', label="ML Hail " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_value))
-        plt.plot(roc_curve_hailcast_value[0], roc_curve_hailcast_value[1], linestyle='-.', label="Hailcast " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_hailcast_value), color=plt.gca().lines[-1].get_color())
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic Curve')
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_output_dir, 'ROC_Curve.png'))
+    # # Make the ROC plot
+    # fig = plt.figure()
+    # fig.patch.set_facecolor('white')
+    # plt.plot([0,1], [0,1], linestyle='--', label='No Skill: AUC=%.3f' % (0.5))
+    # for roc_auc_score_value, roc_auc_score_hailcast_value, roc_curve_value, roc_curve_hailcast_value, lead_time_name in zip(roc_auc_scores, roc_auc_scores_hailcast, roc_curves, roc_curves_hailcast, lead_time_names_pretty):
+    #     plt.plot(roc_curve_value[0], roc_curve_value[1], linestyle='-', label="ML Hail " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_value))
+    #     plt.plot(roc_curve_hailcast_value[0], roc_curve_hailcast_value[1], linestyle='-.', label="Hailcast " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_hailcast_value), color=plt.gca().lines[-1].get_color())
+    # plt.xlabel('False Positive Rate')
+    # plt.ylabel('True Positive Rate')
+    # plt.title('Receiver Operating Characteristic Curve')
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.savefig(os.path.join(plot_output_dir, 'ROC_Curve.png'))
 
-    # Calculate the various calibration values
-    calibration_curves = []
-    calibration_curves_hailcast = []
-    for truth, prediction, hailcast in zip(truths_flattened, predictions_flattened, hailcast_flattened):
-        prob_true, prob_pred = calibration_curve(truth, prediction, n_bins=100)
-        calibration_curves.append((prob_pred, prob_true))
-        prob_true, prob_pred = calibration_curve(truth, hailcast, n_bins=100)
-        calibration_curves_hailcast.append((prob_pred, prob_true))
-
-    # Make the calibration plot
-    fig = plt.figure()
-    fig.patch.set_facecolor('white')
-    plt.plot([0,1], linestyle='--')
-    for calibration_curve_val, calibration_curve_hailcast_val, lead_time_name in zip(calibration_curves, calibration_curves_hailcast, lead_time_names_pretty):
-        plt.plot(calibration_curve_val[0], calibration_curve_val[1], linestyle='-', label="ML Hail " + lead_time_name)
-        plt.plot(calibration_curve_hailcast_val[0], calibration_curve_hailcast_val[1], linestyle='-.', label="Hailcast " + lead_time_name, color=plt.gca().lines[-1].get_color())
-    plt.ylabel("Observed Frequency")
-    plt.xlabel("Predicted Probability")
-    plt.title("Reliability Diagram")
-    plt.legend(loc="best")
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_output_dir, 'Reliability_Diagram.png'))
+    # # Make the calibration plot
+    # fig = plt.figure()
+    # fig.patch.set_facecolor('white')
+    # plt.plot([0,1], linestyle='--')
+    # for calibration_curve_val, calibration_curve_hailcast_val, lead_time_name in zip(calibration_curves, calibration_curves_hailcast, lead_time_names_pretty):
+    #     plt.plot(calibration_curve_val[0], calibration_curve_val[1], linestyle='-', label="ML Hail " + lead_time_name)
+    #     plt.plot(calibration_curve_hailcast_val[0], calibration_curve_hailcast_val[1], linestyle='-.', label="Hailcast " + lead_time_name, color=plt.gca().lines[-1].get_color())
+    # plt.ylabel("Observed Frequency")
+    # plt.xlabel("Predicted Probability")
+    # plt.title("Reliability Diagram")
+    # plt.legend(loc="best")
+    # plt.tight_layout()
+    # plt.savefig(os.path.join(plot_output_dir, 'Reliability_Diagram.png'))
 
 
 if __name__ == "__main__":

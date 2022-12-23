@@ -3,20 +3,24 @@ import numpy as np
 import glob
 import os
 
-EXAMPLES_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/examples/*"
-LABELS_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/labels/*"
-MIN_MAX_FILES_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/mins_maxs"
+EXAMPLES_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/train/examples/*"
+LABELS_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/train/labels/*"
+MIN_MAX_FILES_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/mins_maxs"
+EXAMPLE_VARS_TO_DROP = ["time"]
+LABEL_VARS_TO_DROP = ["time"]
 
 examples_files = glob.glob(EXAMPLES_NETCDF_GLOB)
 examples_files.sort()
 labels_files = glob.glob(LABELS_NETCDF_GLOB)
 labels_files.sort()
 
-one_examples_ds = xr.open_dataset(examples_files[0], decode_cf=False)
+one_examples_ds = xr.open_dataset(examples_files[0])
+one_examples_ds = one_examples_ds.drop(EXAMPLE_VARS_TO_DROP)
 example_keys = [key for key in one_examples_ds.keys()]
 one_examples_ds.close()
 
-one_labels_ds = xr.open_dataset(labels_files[0], decode_cf=False)
+one_labels_ds = xr.open_dataset(labels_files[0])
+one_labels_ds = one_labels_ds.drop(LABEL_VARS_TO_DROP)
 label_keys = [key for key in one_labels_ds.keys()]
 one_labels_ds.close()
 
@@ -26,8 +30,11 @@ examples_min = np.full(len(example_keys), np.inf)
 labels_min = np.full(len(label_keys), np.inf)
 
 for j, (examples_file, labels_file) in enumerate(zip(examples_files, labels_files)):
-    examples_ds = xr.open_dataset(examples_file, decode_cf=False)
-    labels_ds = xr.open_dataset(labels_file, decode_cf=False)
+    examples_ds = xr.open_dataset(examples_file)
+    labels_ds = xr.open_dataset(labels_file)
+
+    examples_ds = examples_ds.drop(EXAMPLE_VARS_TO_DROP)
+    labels_ds = labels_ds.drop(LABEL_VARS_TO_DROP)
 
     examples_array = examples_ds.to_array().to_numpy()
     labels_array = labels_ds.to_array().to_numpy()
@@ -36,12 +43,12 @@ for j, (examples_file, labels_file) in enumerate(zip(examples_files, labels_file
     labels_ds.close()
 
     for i in range(len(examples_max)):
-        examples_max[i] = np.max((examples_max[i], np.max(examples_array[i,...])))
-        examples_min[i] = np.min((examples_min[i], np.min(examples_array[i,...])))
+        examples_max[i] = np.nanmax((examples_max[i], np.nanmax(examples_array[i,...])))
+        examples_min[i] = np.nanmin((examples_min[i], np.nanmin(examples_array[i,...])))
 
     for i in range(len(labels_max)):
-        labels_max[i] = np.max((labels_max[i], np.max(labels_array[i,...])))
-        labels_min[i] = np.min((labels_min[i], np.min(labels_array[i,...])))
+        labels_max[i] = np.nanmax((labels_max[i], np.nanmax(labels_array[i,...])))
+        labels_min[i] = np.nanmin((labels_min[i], np.nanmin(labels_array[i,...])))
 
     print("Finished file num: " + str(j))
 

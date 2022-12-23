@@ -21,7 +21,7 @@ MNIST models.
 import py3nvml
 
 # Grab your prefered GPU
-py3nvml.grab_gpus(num_gpus=1, gpu_select=[1])
+py3nvml.grab_gpus(num_gpus=1, gpu_select=[3])
 
 import tensorflow as tf
 
@@ -42,7 +42,9 @@ from tensorboard.plugins.hparams import api as hp
 from keras_unet_collection import models
 from operator import itemgetter
 from custom_metrics import MaxCriticalSuccessIndex
+from custom_metrics import WeightedBinaryCrossEntropy
 import glob
+import warnings
 
 if int(tf.__version__.split(".")[0]) < 2:
     # The tag names emitted for Keras metrics changed from "acc" (in 1.x)
@@ -58,7 +60,7 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_string(
     "logdir",
-    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/unet_3plus/tensorboard_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/saved_models/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -69,38 +71,41 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_integer(
     "num_epochs",
-    250,
+    600, # was 50 and then 1500
     "Number of epochs per trial.",
 )
 
 # my params
-TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/train/tf_datasets/*"
-TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/patches/val/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/unet_3plus/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/trained_at_init_time/saved_models/unet_3plus/checkpoints"
+TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/train/tf_datasets/*"
+TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/val/tf_datasets/*"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/saved_models/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/saved_models/checkpoints"
 # VAL_FRAC = 0.9 # Actually the train frac
-NUM_SAMPLES_IN_MEM = 22888
-INPUT_SHAPE = (64,64,15)
+NUM_SAMPLES_IN_MEM = 1000
+MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = False
+INPUT_SHAPE = (128,128,12,13) # Was (128,128,12,13)
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 1
 # STEPS_PER_EPOCH = 20
-PATIENCE = 5
+PATIENCE = 8 # Was 4
 # TF_DATASET_FILE_SAMPLE_NUM = 8000
+IS_3D_DATA = True
 
 #convolution params
 HP_CONV_LAYERS = hp.HParam("conv_layers", hp.IntInterval(1, 3))
 HP_CONV_KERNEL_SIZE = hp.HParam("conv_kernel_size", hp.Discrete([3, 5, 7]))
 HP_CONV_ACTIVATION = hp.HParam("conv_activation", hp.Discrete(['LeakyReLU']))
 HP_CONV_KERNELS = hp.HParam('num_of_kernels', hp.Discrete([4,8,16,32]))
+HP_LOSS_WEIGHT = hp.HParam('loss_weights', hp.Discrete([2.0,3.0,4.0,5.0,7.0]))
 
 #unet param
-HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([3,4,5]))
+HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([1,2,3])) # Was [3,4,5]
 HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam"]))
-HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy"])) 
+HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy", "weighted_binary_crossentropy"])) 
 HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
 HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256,512]))
-HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([512]))
+HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([128])) # Was 512
 HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([1e-2,1e-3]))
 
 HPARAMS = [HP_CONV_LAYERS,
@@ -114,6 +119,7 @@ HPARAMS = [HP_CONV_LAYERS,
     HP_BATCHSIZE,
     HP_VAL_BATCHSIZE,
     HP_LEARNING_RATE,
+    HP_LOSS_WEIGHT,
 ]
 
 METRICS = ["binary_accuracy", "max_csi"]
@@ -151,15 +157,22 @@ METRICS_SUMMARY = [
     ),
 ]
 
-def build_loss_dict(): #weight,thresh):
+def build_loss_dict(weight):
     loss_dict = {}
     loss_dict['binary_crossentropy'] = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+    loss_dict['weighted_binary_crossentropy'] = WeightedBinaryCrossEntropy(weights=[weight,1.0])
     return loss_dict
 
 def build_metric_dict():
     metric_dict = {}
     metric_dict["binary_accuracy"] = tf.keras.metrics.BinaryAccuracy()
     metric_dict["max_csi"] = MaxCriticalSuccessIndex()
+    if IS_3D_DATA:
+        metric_dict["max_csi_0"] = MaxCriticalSuccessIndex(name="max_csi_0", is_3D=True, time_index=0)
+        metric_dict["max_csi_15"] = MaxCriticalSuccessIndex(name="max_csi_15", is_3D=True, time_index=3)
+        metric_dict["max_csi_30"] = MaxCriticalSuccessIndex(name="max_csi_30", is_3D=True, time_index=6)
+        metric_dict["max_csi_45"] = MaxCriticalSuccessIndex(name="max_csi_45", is_3D=True, time_index=9)
+        metric_dict["max_csi_55"] = MaxCriticalSuccessIndex(name="max_csi_55", is_3D=True, time_index=11)
     return metric_dict
 
 def build_opt_dict(learning_rate):
@@ -185,13 +198,20 @@ def model_fn(hparams, seed):
     for i in np.arange(1,hparams[HP_UNET_DEPTH]+1,1):
         kernel_list.append(hparams[HP_CONV_KERNELS]*i)
 
-    model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
-                      stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
-                      activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                      batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')
+    # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
+    if IS_3D_DATA:
+        model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                        stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                        activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                        batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet', collapse=False)
+    else:
+        model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                        stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                        activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                        batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')
 
     #compile losses: 
-    loss_dict = build_loss_dict() #hparams[HP_LOSS_WEIGHT],hparams[HP_LOSS_THRESH])
+    loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])
     opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
     metric_dict = build_metric_dict()
     model.compile(
@@ -199,7 +219,10 @@ def model_fn(hparams, seed):
         optimizer=opt_dict[hparams[HP_OPTIMIZER]],
         metrics=list(itemgetter(*METRICS)(metric_dict)),
     )
-    return model
+
+    trainable_count = np.sum([tf.keras.backend.count_params(w) for w in model.trainable_weights])
+
+    return model,trainable_count
 
 def prepare_data(tf_ds_train_dir_glob, tf_ds_val_dir_glob):
     """ Load data """
@@ -249,13 +272,19 @@ def run(data, base_logdir, session_id, hparams):
       session_id: A unique string ID for this session.
       hparams: A dict mapping hyperparameters in `HPARAMS` to values.
     """
-    model = model_fn(hparams=hparams, seed=session_id)
+    model,trainable_count = model_fn(hparams=hparams, seed=session_id)
     logdir = os.path.join(base_logdir, session_id)
+
+    # if trainable_count > 4000000: #TODO: Maybe make this number a setting too?
+    #     return
 
     ds_train, ds_val = data
 
     #batch the training data accordingly
-    ds_train = ds_train.shuffle(NUM_SAMPLES_IN_MEM).batch(hparams[HP_BATCHSIZE]) #TODO: Used to have .repeat between shuffle and batch
+    if MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE:
+        ds_train = ds_train.shuffle(NUM_SAMPLES_IN_MEM).batch(hparams[HP_BATCHSIZE])
+    else:
+        ds_train = ds_train.shuffle(NUM_SAMPLES_IN_MEM).repeat().batch(hparams[HP_BATCHSIZE])
 
     #this batch is arbitrary, just needed so that you dont overwelm RAM. 
     ds_val = ds_val.batch(hparams[HP_VAL_BATCHSIZE])
@@ -269,22 +298,39 @@ def run(data, base_logdir, session_id, hparams):
     hparams_callback = hp.KerasCallback(logdir, hparams)
 
     checkpoint_path = os.path.join(CHECKPOINTS_DIR, session_id)
-    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
-                            monitor='val_max_csi', verbose=0, save_best_only=True, 
-                            save_weights_only=False, save_freq='epoch', mode="max")
+    if IS_3D_DATA:
+        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
+                                monitor='val_max_csi_55', verbose=0, save_best_only=True, 
+                                save_weights_only=False, save_freq='epoch', mode="max")
+    else:
+        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
+                                monitor='val_max_csi', verbose=0, save_best_only=True, 
+                                save_weights_only=False, save_freq='epoch', mode="max")
     
     callback_es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=PATIENCE, mode="min")
     
     #add images to board 
     print(model.summary())
 
-    result = model.fit(ds_train,
-        epochs=flags.FLAGS.num_epochs,
-        shuffle=False,
-        validation_data=ds_val,
-        validation_freq = VALIDATION_FREQ,
-        # steps_per_epoch = NUM_SAMPLES_IN_MEM // hparams[HP_BATCHSIZE], # TODO: USED TO BE USED FOR THE LARGER DATASETS
-        callbacks=[callback, hparams_callback, checkpoint_callback, callback_es],verbose=1)
+    try:
+        if MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE:
+            result = model.fit(ds_train,
+                epochs=flags.FLAGS.num_epochs,
+                shuffle=False,
+                validation_data=ds_val,
+                validation_freq = VALIDATION_FREQ,
+                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es],verbose=1)
+        else:
+            result = model.fit(ds_train,
+                epochs=flags.FLAGS.num_epochs,
+                shuffle=False,
+                validation_data=ds_val,
+                validation_freq = VALIDATION_FREQ,
+                steps_per_epoch = NUM_SAMPLES_IN_MEM // hparams[HP_BATCHSIZE],
+                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es],verbose=1)
+    except:
+        warnings.warn("Had to skip training a model because it raised an exception!")
+        return
 
     #save trained model, need to build path first 
     # split_dir = logdir.split('log1')
@@ -292,6 +338,9 @@ def run(data, base_logdir, session_id, hparams):
     # left = H5_MODELS_DIR
     model_save_path = os.path.join(H5_MODELS_DIR, session_id + "model.h5")
     model.save(model_save_path)
+
+    tf.keras.backend.clear_session()
+    del model
 
 
 def run_all(logdir, verbose=False):
@@ -302,7 +351,7 @@ def run_all(logdir, verbose=False):
       verbose: If true, print out each run's name as it begins.
     """
     data = prepare_data(TF_TRAIN_DS_PATH_GLOB, TF_VAL_DS_PATH_GLOB)
-    rng = random.Random(0)
+    rng = random.Random()
 
     with tf.summary.create_file_writer(logdir).as_default():
         hp.hparams_config(hparams=HPARAMS, metrics=METRICS_SUMMARY)
@@ -332,11 +381,67 @@ def run_all(logdir, verbose=False):
 
 
 def main(unused_argv):
-    np.random.seed(0)
+    # np.random.seed(0)
     logdir = flags.FLAGS.logdir
     print('removing old logs')
     shutil.rmtree(logdir, ignore_errors=True)
     print("Saving output to %s." % logdir)
+    if IS_3D_DATA:
+        METRICS.append("max_csi_0")
+        METRICS.append("max_csi_15")
+        METRICS.append("max_csi_30")
+        METRICS.append("max_csi_45")
+        METRICS.append("max_csi_55")
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_0",
+            group="validation",
+            display_name="Max CSI 0 (val.)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_0",
+            group="train",
+            display_name="Max CSI 0 (train)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_15",
+            group="validation",
+            display_name="Max CSI 15 (val.)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_15",
+            group="train",
+            display_name="Max CSI 15 (train)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_30",
+            group="validation",
+            display_name="Max CSI 30 (val.)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_30",
+            group="train",
+            display_name="Max CSI 30 (train)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_45",
+            group="validation",
+            display_name="Max CSI 45 (val.)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_45",
+            group="train",
+            display_name="Max CSI 45 (train)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_55",
+            group="validation",
+            display_name="Max CSI 55 (val.)",
+            ))
+        METRICS_SUMMARY.append(hp.Metric(
+            "epoch_max_csi_55",
+            group="train",
+            display_name="Max CSI 55 (train)",
+            ))
     run_all(logdir=logdir, verbose=True)
     print("Done. Output saved to %s." % logdir)
 

@@ -2,16 +2,16 @@
 
 #SBATCH --partition=ai2es
 #SBATCH --nodes=1
-#SBATCH --nodelist=c733
+#SBATCH --nodelist=c830
 # Thread count:
 #SBATCH --cpus-per-task=12
 # memory in MB
-#SBATCH --mem=204800
+#SBATCH --mem=102400
 # The %04a is translated into a 4-digit number that encodes the SLURM_ARRAY_TASK_ID
-#SBATCH --output=/scratch/tgschmidt/train_model_%04a_stdout.txt
-#SBATCH --error=/scratch/tgschmidt/train_model_%04a_stderr.txt
-#SBATCH --time=24:00:00
-#SBATCH --job-name=test_nowcasting
+#SBATCH --output=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/slurm_output/out/train_model_00_%04a_stdout.txt
+#SBATCH --error=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/slurm_output/err/train_model_00_%04a_stderr.txt
+#SBATCH --time=72:00:00
+#SBATCH --job-name=nowcasting_00
 #SBATCH --mail-user=tobias.schmidt@ou.edu
 #SBATCH --mail-type=ALL
 #SBATCH --chdir=/home/tgschmidt/hail/src

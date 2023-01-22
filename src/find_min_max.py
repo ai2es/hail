@@ -3,9 +3,9 @@ import numpy as np
 import glob
 import os
 
-EXAMPLES_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/train/examples/*"
-LABELS_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/train/labels/*"
-MIN_MAX_FILES_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/mins_maxs"
+EXAMPLES_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/examples/*"
+LABELS_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/labels/*"
+MIN_MAX_FILES_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/mins_maxs"
 EXAMPLE_VARS_TO_DROP = ["time"]
 LABEL_VARS_TO_DROP = ["time"]
 

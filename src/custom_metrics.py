@@ -25,12 +25,24 @@ class MaxCriticalSuccessIndex(tf.keras.metrics.Metric):
     """ 
 
     def __init__(self, name="max_csi",
-                 tp = tf.keras.metrics.TruePositives(thresholds=np.arange(0.05,1.05,0.05).tolist()),
-                 fp = tf.keras.metrics.FalsePositives(thresholds=np.arange(0.05,1.05,0.05).tolist()),
-                 fn = tf.keras.metrics.FalseNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist()),
+                #  tp = tf.keras.metrics.TruePositives(thresholds=np.arange(0.05,1.05,0.05).tolist()),
+                #  fp = tf.keras.metrics.FalsePositives(thresholds=np.arange(0.05,1.05,0.05).tolist()),
+                #  fn = tf.keras.metrics.FalseNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist()),
                  is_3D = False,
                  time_index = 0,
+                 scope = None,
                  **kwargs):
+
+        if scope is not None:
+            with scope.scope():
+                tp = tf.keras.metrics.TruePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+                fp = tf.keras.metrics.FalsePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+                fn = tf.keras.metrics.FalseNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+        else:
+            tp = tf.keras.metrics.TruePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+            fp = tf.keras.metrics.FalsePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+            fn = tf.keras.metrics.FalseNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+
         super(MaxCriticalSuccessIndex, self).__init__(name=name, **kwargs)
 
         #initialize csi value, if no data given, it will be 0 
@@ -121,10 +133,11 @@ def fractions_skill_score_loss(mask_size, c=1.0, cutoff=0.5, want_hard_discretiz
             - The model's actual prediction.
         """
 
+        # TODO: Test if below correct
         # If the tensor represents a 3D image, turn it into a 2D image by taking the maximum along the vertical columns
         if len(y_pred.shape) == 5:
-            y_true = tf.experimental.numpy.amax(y_true, axis=2)
-            y_pred = tf.experimental.numpy.amax(y_pred, axis=2)
+            y_true = tf.experimental.numpy.mean(y_true, axis=3) # Axis was 2 for some reason and was also amax instead
+            y_pred = tf.experimental.numpy.mean(y_pred, axis=3) # Axis was 2 for some reason and was also amax instead
 
         if want_hard_discretization:
             y_true_binary = tf.where(y_true > cutoff, 1.0, 0.0)
@@ -161,6 +174,19 @@ def fractions_skill_score_loss(mask_size, c=1.0, cutoff=0.5, want_hard_discretiz
             return MSE_n / (MSE_n_ref + my_epsilon)
 
     return fractions_skill_score
+
+
+def max_FSS_test_dataset(full_obs, full_fcst, radius):
+    # Expects (n_samples, lat, lon) shapes
+
+    thresholds = np.arange(0.05,1.05,0.05)
+
+    all_poss_FSS_outcomes = []
+    for thres in thresholds:
+        FSS_outcome = np.mean([compute_FSS_metric(full_obs[i,:,:], full_fcst[i,:,:], radius, thres) for i in range(full_obs.shape[0])])
+        all_poss_FSS_outcomes.append(FSS_outcome)
+
+    return np.max(all_poss_FSS_outcomes)
 
 
 def compute_FSS_metric(obs, fcst, nbrhd_rad, thres, buf_width=0, min_points=30):

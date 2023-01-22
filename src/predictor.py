@@ -3,6 +3,7 @@ import glob
 from tensorflow import keras
 import argparse
 import json
+import os
 # from custom_metrics import MaxCriticalSuccessIndex
 
 
@@ -13,12 +14,15 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Unet Model', fromfile_prefix_chars='@')
 
-    parser.add_argument('--single_checkpoint', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/saved_models_45/checkpoints/75')
-    parser.add_argument('--predictions_outfile', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/predictions/y_hats_45.nc')
+    parser.add_argument('--single_checkpoint', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/saved_models/checkpoints/46')
+    parser.add_argument('--predictions_outfile', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/predictions/y_hats.nc')
     # parser.add_argument('--args_json', type=str, default='/home/tgschmidt/hail/configs/predict.json')
-    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/processed/examples/*')
-    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/test/processed/labels/*')
-    parser.add_argument('--selected_time', type=int, default=9)
+    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/processed/examples/*')
+    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/processed/labels/*')
+    parser.add_argument('--selected_time', type=int, default=None)
+    parser.add_argument('--use_hailcast', '-u', action='store_true')
+    parser.add_argument('--multi_model', '-m', action='store_true')
+    parser.add_argument('--run_num', type=int, default=0)
     
     return parser
 
@@ -37,6 +41,19 @@ if __name__ == "__main__":
     checkpoint_path = args["single_checkpoint"]
     predictions_outfile = args["predictions_outfile"]
     selected_time = args["selected_time"]
+    use_hailcast = args["use_hailcast"]
+    run_num = args["run_num"]
+    multi_model = args["multi_model"]
+
+    TIMES_IN_MINS = ["00","05","10","15","20","25","30","35","40","45","50","55"]
+    CHOSEN_MODELS = ["saved_models_00/checkpoints/125","saved_models_15/checkpoints/334","saved_models_30/checkpoints/319","saved_models_45/checkpoints/138","saved_models_55/checkpoints/256"]
+    MODEL_INDICES = [0,0,0,1,1,1,2,2,2,3,3,4]
+    # CHOSEN_MODELS = ["saved_models_00/checkpoints/125"]
+    # MODEL_INDICES = [0,0,0,0,0,0,0,0,0,0,0,0]
+
+    if multi_model:
+        selected_time = run_num
+        checkpoint_path = os.path.join(checkpoint_path, CHOSEN_MODELS[MODEL_INDICES[run_num]])
 
     # glob files
     label_files = glob.glob(label_patches_dir)
@@ -61,7 +78,7 @@ if __name__ == "__main__":
     label_keys = list(labels_ds.keys())
     label_dims = list(labels_ds.dims)
 
-    if "hailcast" in examples_ds.keys():
+    if "hailcast" in examples_ds.keys() and not use_hailcast:
         examples_ds = examples_ds.drop("hailcast")
 
     labels_ds.close()
@@ -82,4 +99,7 @@ if __name__ == "__main__":
     ds_return = xr.Dataset(data_vars = new_ds_dict)
 
     #save out the prediction and truth values
+    if ".nc" not in predictions_outfile:
+        predictions_outfile = os.path.join(predictions_outfile, "y_hats_" + TIMES_IN_MINS[run_num] + ".nc")
+        # predictions_outfile = os.path.join(predictions_outfile, "y_hats_single_" + TIMES_IN_MINS[run_num] + ".nc")
     ds_return.to_netcdf(predictions_outfile)

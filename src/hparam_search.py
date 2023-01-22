@@ -21,16 +21,16 @@ MNIST models.
 import py3nvml
 
 # Grab your prefered GPU
-py3nvml.grab_gpus(num_gpus=1, gpu_select=[3])
+py3nvml.grab_gpus(num_gpus=4, gpu_select=[0,1,2,3])
 
 import tensorflow as tf
 
-# # GPU check
-# physical_devices = tf.config.list_physical_devices('GPU') 
-# n_physical_devices = len(physical_devices)
-# if(n_physical_devices > 0):
-#     for device in physical_devices:
-#         tf.config.experimental.set_memory_growth(device, True)
+# GPU check
+physical_devices = tf.config.list_physical_devices('GPU') 
+n_physical_devices = len(physical_devices)
+if(n_physical_devices > 0):
+    for device in physical_devices:
+        tf.config.experimental.set_memory_growth(device, True)
 
 import os
 import random
@@ -43,6 +43,7 @@ from keras_unet_collection import models
 from operator import itemgetter
 from custom_metrics import MaxCriticalSuccessIndex
 from custom_metrics import WeightedBinaryCrossEntropy
+from custom_metrics import fractions_skill_score_loss
 import glob
 import warnings
 
@@ -55,12 +56,12 @@ if int(tf.__version__.split(".")[0]) < 2:
 
 flags.DEFINE_integer(
     "num_session_groups",
-    300,
+    500, # Was 300
     "The approximate number of session groups to create.",
 )
 flags.DEFINE_string(
     "logdir",
-    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/saved_models/tensorboard_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -71,26 +72,27 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_integer(
     "num_epochs",
-    600, # was 50 and then 1500
+    50, # was 50 and then 1500
     "Number of epochs per trial.",
 )
 
 # my params
-TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/train/tf_datasets/*"
-TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/patches/val/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/saved_models/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed-128_size/saved_models/checkpoints"
+TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/tf_datasets/*"
+TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/val/tf_datasets/*"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/checkpoints"
 # VAL_FRAC = 0.9 # Actually the train frac
-NUM_SAMPLES_IN_MEM = 1000
-MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = False
-INPUT_SHAPE = (128,128,12,13) # Was (128,128,12,13)
+NUM_SAMPLES_IN_MEM = 28250
+MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = True
+INPUT_SHAPE = (128,128,12,18) # Was (128,128,12,13) and then (128,128,12,18)
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 1
 # STEPS_PER_EPOCH = 20
-PATIENCE = 8 # Was 4
+PATIENCE = 3 # Was 4
 # TF_DATASET_FILE_SAMPLE_NUM = 8000
 IS_3D_DATA = True
+USE_MULTIPLE_GPUS = True
 
 #convolution params
 HP_CONV_LAYERS = hp.HParam("conv_layers", hp.IntInterval(1, 3))
@@ -98,11 +100,12 @@ HP_CONV_KERNEL_SIZE = hp.HParam("conv_kernel_size", hp.Discrete([3, 5, 7]))
 HP_CONV_ACTIVATION = hp.HParam("conv_activation", hp.Discrete(['LeakyReLU']))
 HP_CONV_KERNELS = hp.HParam('num_of_kernels', hp.Discrete([4,8,16,32]))
 HP_LOSS_WEIGHT = hp.HParam('loss_weights', hp.Discrete([2.0,3.0,4.0,5.0,7.0]))
+HP_FSS_RADII = hp.HParam('FSS_radii', hp.Discrete([2,3,4]))
 
 #unet param
-HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([1,2,3])) # Was [3,4,5]
+HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([1,2,3])) # Was [1,2,3] and then [3,4,5]
 HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam"]))
-HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy", "weighted_binary_crossentropy"])) 
+HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy", "weighted_binary_crossentropy"]))
 HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
 HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256,512]))
 HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([128])) # Was 512
@@ -120,6 +123,7 @@ HPARAMS = [HP_CONV_LAYERS,
     HP_VAL_BATCHSIZE,
     HP_LEARNING_RATE,
     HP_LOSS_WEIGHT,
+    HP_FSS_RADII
 ]
 
 METRICS = ["binary_accuracy", "max_csi"]
@@ -157,22 +161,23 @@ METRICS_SUMMARY = [
     ),
 ]
 
-def build_loss_dict(weight):
+def build_loss_dict(weight, FSS_radius):
     loss_dict = {}
     loss_dict['binary_crossentropy'] = tf.keras.losses.BinaryCrossentropy(from_logits=False)
     loss_dict['weighted_binary_crossentropy'] = WeightedBinaryCrossEntropy(weights=[weight,1.0])
+    loss_dict['FSS'] = fractions_skill_score_loss(FSS_radius)
     return loss_dict
 
 def build_metric_dict():
     metric_dict = {}
     metric_dict["binary_accuracy"] = tf.keras.metrics.BinaryAccuracy()
-    metric_dict["max_csi"] = MaxCriticalSuccessIndex()
+    metric_dict["max_csi"] = MaxCriticalSuccessIndex(scope=mirrored_strategy)
     if IS_3D_DATA:
-        metric_dict["max_csi_0"] = MaxCriticalSuccessIndex(name="max_csi_0", is_3D=True, time_index=0)
-        metric_dict["max_csi_15"] = MaxCriticalSuccessIndex(name="max_csi_15", is_3D=True, time_index=3)
-        metric_dict["max_csi_30"] = MaxCriticalSuccessIndex(name="max_csi_30", is_3D=True, time_index=6)
-        metric_dict["max_csi_45"] = MaxCriticalSuccessIndex(name="max_csi_45", is_3D=True, time_index=9)
-        metric_dict["max_csi_55"] = MaxCriticalSuccessIndex(name="max_csi_55", is_3D=True, time_index=11)
+        metric_dict["max_csi_0"] = MaxCriticalSuccessIndex(name="max_csi_0", scope=mirrored_strategy, is_3D=True, time_index=0)
+        metric_dict["max_csi_15"] = MaxCriticalSuccessIndex(name="max_csi_15", scope=mirrored_strategy, is_3D=True, time_index=3)
+        metric_dict["max_csi_30"] = MaxCriticalSuccessIndex(name="max_csi_30", scope=mirrored_strategy, is_3D=True, time_index=6)
+        metric_dict["max_csi_45"] = MaxCriticalSuccessIndex(name="max_csi_45", scope=mirrored_strategy, is_3D=True, time_index=9)
+        metric_dict["max_csi_55"] = MaxCriticalSuccessIndex(name="max_csi_55", scope=mirrored_strategy, is_3D=True, time_index=11)
     return metric_dict
 
 def build_opt_dict(learning_rate):
@@ -198,27 +203,51 @@ def model_fn(hparams, seed):
     for i in np.arange(1,hparams[HP_UNET_DEPTH]+1,1):
         kernel_list.append(hparams[HP_CONV_KERNELS]*i)
 
-    # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
-    if IS_3D_DATA:
-        model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
-                        stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
-                        activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                        batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet', collapse=False)
-    else:
-        model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
-                        stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
-                        activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                        batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')
+    if USE_MULTIPLE_GPUS:
+        with mirrored_strategy.scope():
+            # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
+            if IS_3D_DATA:
+                model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet', collapse=False)
+            else:
+                model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')
 
-    #compile losses: 
-    loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])
-    opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
-    metric_dict = build_metric_dict()
-    model.compile(
-        loss=loss_dict[hparams[HP_LOSS]],
-        optimizer=opt_dict[hparams[HP_OPTIMIZER]],
-        metrics=list(itemgetter(*METRICS)(metric_dict)),
-    )
+            #compile losses: 
+            loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT], hparams[HP_FSS_RADII])
+            opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
+            metric_dict = build_metric_dict()
+            model.compile(
+                loss=loss_dict[hparams[HP_LOSS]],
+                optimizer=opt_dict[hparams[HP_OPTIMIZER]],
+                metrics=list(itemgetter(*METRICS)(metric_dict)),
+            )
+    else:
+        # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
+        if IS_3D_DATA:
+            model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                            stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                            activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                            batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet', collapse=False)
+        else:
+            model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                            stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                            activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                            batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')
+
+        #compile losses: 
+        loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT], hparams[HP_FSS_RADII])
+        opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
+        metric_dict = build_metric_dict()
+        model.compile(
+            loss=loss_dict[hparams[HP_LOSS]],
+            optimizer=opt_dict[hparams[HP_OPTIMIZER]],
+            metrics=list(itemgetter(*METRICS)(metric_dict)),
+        )
 
     trainable_count = np.sum([tf.keras.backend.count_params(w) for w in model.trainable_weights])
 
@@ -227,29 +256,15 @@ def model_fn(hparams, seed):
 def prepare_data(tf_ds_train_dir_glob, tf_ds_val_dir_glob):
     """ Load data """
 
-    #do this for both training and validations
-    #load netcdf
-    #convert to tensors ds_train = tf.data.Dataset.from_???_tensors(([125,125,8], [125,125,1]))
-     
-    #This is the tf.dataset route 
-    # x_tensor_shape = (128, 128, 29)
-    # y_tensor_shape = (128, 128, 1)
-    # elem_spec = (tf.TensorSpec(shape=x_tensor_shape, dtype=tf.float16), tf.TensorSpec(shape=y_tensor_shape, dtype=tf.float16))
-
-    # ds_train = tf.data.experimental.load('/scratch/randychase/updraft_training2.tf',
-    #                                     elem_spec)
-
-    # ds_val = tf.data.experimental.load('/scratch/randychase/updraft_validation2.tf',
-    #                                     elem_spec)
-
     tf_ds_files = glob.glob(tf_ds_train_dir_glob)
     tf_ds_files.sort()
     tf_val_ds_files = glob.glob(tf_ds_val_dir_glob)
     tf_val_ds_files.sort()
 
-    # val_set_index = int(val_frac*len(tf_ds_files))
-    # tf_val_ds_files = tf_ds_files[val_set_index:]
-    # tf_ds_files = tf_ds_files[:val_set_index]
+    ######### TEMP #############
+    tf_ds_files = tf_ds_files[:32]
+    # tf_val_ds_files = tf_val_ds_files[:32]
+    ######################################
 
     complete_tf_ds = tf.data.experimental.load(tf_ds_files.pop(0))
     for tf_ds_file in tf_ds_files:
@@ -260,6 +275,10 @@ def prepare_data(tf_ds_train_dir_glob, tf_ds_val_dir_glob):
     for tf_ds_file in tf_val_ds_files:
         tf_ds = tf.data.experimental.load(tf_ds_file)
         complete_tf_ds_val = complete_tf_ds_val.concatenate(tf_ds)
+    
+    if MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE:
+        complete_tf_ds = complete_tf_ds.cache()
+        complete_tf_ds_val = complete_tf_ds_val.cache()
     
     return (complete_tf_ds, complete_tf_ds_val)
 
@@ -447,4 +466,9 @@ def main(unused_argv):
 
 
 if __name__ == "__main__":
+    if USE_MULTIPLE_GPUS:
+        mirrored_strategy = tf.distribute.MirroredStrategy()
+    else:
+        mirrored_strategy = None
+
     app.run(main)

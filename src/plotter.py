@@ -26,12 +26,12 @@ def create_parser():
     parser = argparse.ArgumentParser(description='Unet Preprocessing', fromfile_prefix_chars='@')
 
     parser.add_argument('--predictions_paths', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed/patches/test/init_plus_00/predictions/y_hats.nc')
-    parser.add_argument('--hailcast_files', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
+    # parser.add_argument('--hailcast_files', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
     parser.add_argument('--unprocessed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
     # The below setting needs to be glob for graphs and direct path for animations
-    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/unprocessed/labels/*')
-    parser.add_argument('--processed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/processed/examples/*')
-    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/images/test_dataset_plots')
+    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/labels/0000.nc')
+    parser.add_argument('--processed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/test/hailcast/examples/*')
+    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/images/animations')
     parser.add_argument('--init_datetime', type=str, default='2019-05-20:2000') # Was '2019-05-01:1900'
     parser.add_argument('--ens_member', type=int, default=1)
     parser.add_argument('--ens_size', type=int, default=18)
@@ -47,7 +47,7 @@ def plot_casestudy_plots(args):
     predictions_paths = args["predictions_paths"]
     unprocessed_labels_path = args["unprocessed_labels"]
     unprocessed_examples_path = args["unprocessed_examples"]
-    hailcast_files = args["hailcast_files"]
+    # hailcast_files = args["hailcast_files"]
     ens_member = args["ens_member"]
     ens_size = args["ens_size"]
     num_patches_per_col = args["num_patches_per_col"]
@@ -64,10 +64,10 @@ def plot_casestudy_plots(args):
     # predictions_paths = [predictions_paths]
     # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190501/predictions/y_hats.nc"]
 
-    predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/predictions/y_hats.nc"]
-    # predictions_paths = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/predictions/y_hats_*")
-    # predictions_paths.sort()
-    # predictions_paths = [predictions_paths]
+    # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190520/predictions/y_hats.nc"]
+    predictions_paths = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/predictions/y_hats_*")
+    predictions_paths.sort()
+    predictions_paths = [predictions_paths]
     ##################################
 
     # NOTE: # This block had to keep decode=False for legacy reasons. So the latlons could be put directly into the numpy arrays without losing them.
@@ -79,7 +79,7 @@ def plot_casestudy_plots(args):
     # The following 3 files are assumed to be single files rather than collections of files since this is for one case study
     ds_labels = xr.open_dataset(unprocessed_labels_path, decode_cf=False)
     ds_examples = xr.open_dataset(unprocessed_examples_path, decode_cf=False)
-    ds_hailcast = xr.open_dataset(hailcast_files, decode_cf=False)
+    ds_hailcast = xr.open_dataset(unprocessed_examples_path, decode_cf=False)
 
     ds_examples = ds_examples[{"ne": ens_member}]
     ds_examples = ds_examples.drop("time")
@@ -334,9 +334,9 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
     # cbar = plt.colorbar(fraction=0.043, pad=0.06)
     # cbar.set_ticks([])
     # cbar.set_label(label=hailcast_label,size=20)
-    plt.contourf(lons,lats,pred_val,np.arange(10,51,5)/100, cmap="Greens", transform=ccrs.PlateCarree(), vmin=0.1, vmax=0.5, zorder=12, alpha=0.8)
+    plt.contourf(lons,lats,pred_val,np.arange(10,101,10)/100, cmap="Greens", transform=ccrs.PlateCarree(), vmin=0.1, vmax=1, zorder=12, alpha=0.8)
     # plt.colorbar(fraction=0.043, pad=0.07, ticks = np.arange(10,101,10)/100).set_label(label=pred_val_label,size=20)
-    plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(10,51,5)/100).set_label(label=pred_val_label,size=30) #Changed padding here since other colorbars removed
+    plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(10,101,10)/100).set_label(label=pred_val_label,size=30) #Changed padding here since other colorbars removed
 
 
     if include_reports:
@@ -358,18 +358,20 @@ def plot_test_data_plots(args):
     labels_glob = args["unprocessed_labels"]
     plot_output_dir = args["plot_output_dir"]
     # predictions_paths = args["predictions_paths"]
-    predictions_paths = [["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_00.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_15.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_30.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_45.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_55.nc"],
-                        ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_00.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_15.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_30.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_45.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_55.nc"],
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats.nc"]
-    model_names = ["Deterministic Single 2D UNet", "Deterministic Multiple 2D UNets", "Deterministic Time-Resolving 3D UNet"]
+    predictions_paths = [
+                        # ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_00.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_15.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_30.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_45.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_single_55.nc"],
+                        # ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_00.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_15.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_30.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_45.nc",
+                        #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_55.nc"],
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/test/predictions/y_hats.nc"]
+    # model_names = ["Deterministic Single 2D UNet", "Deterministic Multiple 2D UNets", "Deterministic Time-Resolving 3D UNet"]
+    model_names = ["Deterministic Time-Resolving 3D UNet"]
     hail_name = "MESH_class_bin"
     lead_time_names_pretty = ["Init Plus 00", "Init Plus 15", "Init Plus 30", "Init Plus 45", "Init Plus 60"]
     lead_time_minutes = [0, 15, 30, 45, 55]

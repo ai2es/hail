@@ -14,19 +14,19 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Unet Preprocessing', fromfile_prefix_chars='@')
 
-    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/val/examples/*')
-    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/val/labels/*')
-    parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/val/tf_datasets')
+    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/examples/*')
+    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/labels*')
+    parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/tf_datasets')
     parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/mins_maxs')
     parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', 'time']) # Use to have hailcast
     parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH95'])
     parser.add_argument('--approx_file_clumping_num', type=int, default=None) # Was 3
-    parser.add_argument('--n_parallel_runs', type=int, default=20) # Was 15
+    parser.add_argument('--n_parallel_runs', type=int, default=None) # Was 15
     parser.add_argument('--run_num', type=int, default=0)
     # parser.add_argument('--ne_dim_num', type=int, default=1)
     parser.add_argument('--selected_time', type=int, default=None)
     parser.add_argument('--ne_dim_size', type=int, default=18)
-    parser.add_argument('--hailcast_threshold', type=float, default=0.393701)
+    parser.add_argument('--hailcast_threshold', type=float, default=1)
     parser.add_argument('--save_as_netcdf', '-s', action='store_true')
     parser.add_argument('--has_ne_dim', '-d', action='store_true')
     parser.add_argument('--min_max_normalize', '-m', action='store_true')

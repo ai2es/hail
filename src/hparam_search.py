@@ -44,6 +44,7 @@ from operator import itemgetter
 from custom_metrics import MaxCriticalSuccessIndex
 from custom_metrics import WeightedBinaryCrossEntropy
 from custom_metrics import fractions_skill_score_loss
+from custom_metrics import EarlyStoppingLoss
 import glob
 import warnings
 
@@ -93,6 +94,7 @@ PATIENCE = 3 # Was 4
 # TF_DATASET_FILE_SAMPLE_NUM = 8000
 IS_3D_DATA = True
 USE_MULTIPLE_GPUS = True
+RANDOM_SEED = 12414
 
 #convolution params
 HP_CONV_LAYERS = hp.HParam("conv_layers", hp.IntInterval(1, 3))
@@ -110,6 +112,8 @@ HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
 HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256,512]))
 HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([128])) # Was 512
 HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([1e-2,1e-3]))
+HP_L2_REG = hp.HParam('l2_reg', hp.Discrete([0.1, 0.05, 0.01, 0.005, 0.001, 0.0001, 0.00001]))
+HP_L1_REG = hp.HParam('l1_reg', hp.Discrete([0.1, 0.05, 0.01, 0.005, 0.001, 0.0001, 0.00001]))
 
 HPARAMS = [HP_CONV_LAYERS,
     HP_CONV_KERNEL_SIZE,
@@ -123,7 +127,9 @@ HPARAMS = [HP_CONV_LAYERS,
     HP_VAL_BATCHSIZE,
     HP_LEARNING_RATE,
     HP_LOSS_WEIGHT,
-    HP_FSS_RADII
+    HP_FSS_RADII,
+    HP_L2_REG,
+    HP_L1_REG
 ]
 
 METRICS = ["binary_accuracy", "max_csi"]
@@ -210,12 +216,12 @@ def model_fn(hparams, seed):
                 model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
                                 stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
                                 activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                                batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet', collapse=False)
+                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
             else:
                 model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
                                 stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
                                 activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                                batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')
+                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
             #compile losses: 
             loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT], hparams[HP_FSS_RADII])
@@ -232,12 +238,12 @@ def model_fn(hparams, seed):
             model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
                             stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
                             activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                            batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet', collapse=False)
+                            batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
         else:
             model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
                             stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
                             activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                            batch_norm=hparams[HP_BATCHNORM], pool='max', unpool='nearest', name='unet')
+                            batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
         #compile losses: 
         loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT], hparams[HP_FSS_RADII])
@@ -262,7 +268,7 @@ def prepare_data(tf_ds_train_dir_glob, tf_ds_val_dir_glob):
     tf_val_ds_files.sort()
 
     ######### TEMP #############
-    tf_ds_files = tf_ds_files[:32]
+    # tf_ds_files = tf_ds_files[:32]
     # tf_val_ds_files = tf_val_ds_files[:32]
     ######################################
 
@@ -327,6 +333,8 @@ def run(data, base_logdir, session_id, hparams):
                                 save_weights_only=False, save_freq='epoch', mode="max")
     
     callback_es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=PATIENCE, mode="min")
+
+    callback_loss = EarlyStoppingLoss()
     
     #add images to board 
     print(model.summary())
@@ -338,7 +346,7 @@ def run(data, base_logdir, session_id, hparams):
                 shuffle=False,
                 validation_data=ds_val,
                 validation_freq = VALIDATION_FREQ,
-                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es],verbose=1)
+                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es, callback_loss],verbose=1)
         else:
             result = model.fit(ds_train,
                 epochs=flags.FLAGS.num_epochs,
@@ -346,7 +354,7 @@ def run(data, base_logdir, session_id, hparams):
                 validation_data=ds_val,
                 validation_freq = VALIDATION_FREQ,
                 steps_per_epoch = NUM_SAMPLES_IN_MEM // hparams[HP_BATCHSIZE],
-                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es],verbose=1)
+                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es, callback_loss],verbose=1)
     except:
         warnings.warn("Had to skip training a model because it raised an exception!")
         return
@@ -370,7 +378,7 @@ def run_all(logdir, verbose=False):
       verbose: If true, print out each run's name as it begins.
     """
     data = prepare_data(TF_TRAIN_DS_PATH_GLOB, TF_VAL_DS_PATH_GLOB)
-    rng = random.Random()
+    rng = random.Random(RANDOM_SEED)
 
     with tf.summary.create_file_writer(logdir).as_default():
         hp.hparams_config(hparams=HPARAMS, metrics=METRICS_SUMMARY)
@@ -400,10 +408,10 @@ def run_all(logdir, verbose=False):
 
 
 def main(unused_argv):
-    # np.random.seed(0)
+    np.random.seed(RANDOM_SEED)
     logdir = flags.FLAGS.logdir
-    print('removing old logs')
-    shutil.rmtree(logdir, ignore_errors=True)
+    # print('removing old logs')
+    # shutil.rmtree(logdir, ignore_errors=True)
     print("Saving output to %s." % logdir)
     if IS_3D_DATA:
         METRICS.append("max_csi_0")

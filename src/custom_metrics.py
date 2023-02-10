@@ -2,7 +2,45 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 import numpy as np
 from tensorflow.python.framework import constant_op
+from tensorflow.keras.callbacks import Callback
 
+class EarlyStoppingLoss(Callback):
+    # Monitor can be switched to val_loss but it may not work since on_test_batch_begin is not used
+    def __init__(self, monitor='loss', value=1000000, verbose=0):
+        super(Callback, self).__init__()
+        self.monitor = monitor
+        self.value = value
+        self.verbose = verbose
+    
+    def on_batch_begin(self, batch, logs={}):
+        current_loss = logs.get(self.monitor)
+        if current_loss is not None:
+            if current_loss > self.value:
+                self.model.stop_training = True
+
+    def on_batch_end(self, batch, logs={}):
+        current_loss = logs.get(self.monitor)
+        if current_loss is not None:
+            if current_loss > self.value:
+                self.model.stop_training = True
+
+    def on_epoch_begin(self, epoch, logs={}):
+        current_loss = logs.get(self.monitor)
+        if current_loss is not None:
+            if current_loss > self.value:
+                self.model.stop_training = True
+
+    def on_epoch_end(self, epoch, logs={}):
+        current_loss = logs.get(self.monitor)
+        if current_loss is not None:
+            if current_loss > self.value:
+                self.model.stop_training = True
+
+    def on_train_begin(self, logs={}):
+        current_loss = logs.get(self.monitor)
+        if current_loss is not None:
+            if current_loss > self.value:
+                self.model.stop_training = True
 
 class MaxCriticalSuccessIndex(tf.keras.metrics.Metric):
     """ 

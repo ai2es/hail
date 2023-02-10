@@ -14,11 +14,11 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Unet Model', fromfile_prefix_chars='@')
 
-    parser.add_argument('--single_checkpoint', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/saved_models/checkpoints/46')
-    parser.add_argument('--predictions_outfile', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/predictions/y_hats.nc')
+    parser.add_argument('--single_checkpoint', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/checkpoints/123')
+    parser.add_argument('--predictions_outfile', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190501/predictions/y_hats.nc')
     # parser.add_argument('--args_json', type=str, default='/home/tgschmidt/hail/configs/predict.json')
-    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/processed/examples/*')
-    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/processed/labels/*')
+    parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190501/processed/examples/*')
+    parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190501/processed/labels/*')
     parser.add_argument('--selected_time', type=int, default=None)
     parser.add_argument('--use_hailcast', '-u', action='store_true')
     parser.add_argument('--multi_model', '-m', action='store_true')

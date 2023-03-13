@@ -17,7 +17,7 @@ def create_parser():
     parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/examples/*')
     parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/labels*')
     parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/tf_datasets')
-    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/mins_maxs')
+    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/mins_maxs')
     parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', 'time']) # Use to have hailcast
     parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH95'])
     parser.add_argument('--approx_file_clumping_num', type=int, default=None) # Was 3
@@ -34,6 +34,7 @@ def create_parser():
     parser.add_argument('--make_hailcast_probabilistic', '-p', action='store_true')
     parser.add_argument('--remove_patches_with_nans', '-r', action='store_true')
     parser.add_argument('--data_is_3D', '-t', action='store_true')
+    parser.add_argument('--unpack_ne', '-u', action='store_true')
     # parser.add_argument('--unpack_3D', '-u', action='store_true')
 
     return parser
@@ -105,6 +106,7 @@ if __name__ == "__main__":
     remove_patches_with_nans = args["remove_patches_with_nans"]
     data_is_3D = args["data_is_3D"]
     selected_time = args["selected_time"]
+    unpack_ne = args["unpack_ne"]
 
     input_files = glob.glob(netcdf_examples_dir)
     input_files.sort()
@@ -168,9 +170,11 @@ if __name__ == "__main__":
             output_ds = output_ds[{"time_dim": selected_time}]
         
         if "hailcast" in input_keys and has_ne_dim and make_hailcast_probabilistic_bool:
+            if not unpack_ne:
+                raise Exception("Cannot have no ne unapacking and make_hailcast_probabilistic_bool right now since the make_hailcast_probabilistic_bool function does np.repeat stuff.")
             input_ds["hailcast"] = (input_ds["hailcast"].dims, make_hailcast_probabilistic(input_ds["hailcast"].data, hailcast_threshold, ne_dim_num, ne_dim_size))
 
-        if has_ne_dim:
+        if has_ne_dim and unpack_ne:
             # Because we have to reshape dimensions
             new_input_ds = xr.Dataset()
             new_output_ds = xr.Dataset()

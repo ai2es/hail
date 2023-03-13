@@ -25,20 +25,22 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Unet Preprocessing', fromfile_prefix_chars='@')
 
-    parser.add_argument('--predictions_paths', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed/patches/test/init_plus_00/predictions/y_hats.nc')
-    # parser.add_argument('--hailcast_files', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
-    parser.add_argument('--unprocessed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
-    # The below setting needs to be glob for graphs and direct path for animations
-    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/labels/0000.nc')
-    parser.add_argument('--processed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/test/hailcast/examples/*')
-    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/images/animations')
+    ######## CASESTUDY SETTINGS #####################
     parser.add_argument('--init_datetime', type=str, default='2019-05-20:2000') # Was '2019-05-01:1900'
     parser.add_argument('--ens_member', type=int, default=1)
     parser.add_argument('--ens_size', type=int, default=18)
     parser.add_argument('--num_patches_per_col', type=int, default=2)
     parser.add_argument('--num_patches_per_row', type=int, default=2)
+    parser.add_argument('--unprocessed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
+    ###### BOTH SETTINGS ##############
     parser.add_argument('--plot_animation', '-a', action='store_true')
     parser.add_argument('--include_reports', '-i', action='store_true')
+    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/images/animations')
+    parser.add_argument('--predictions_paths', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed/patches/test/init_plus_00/predictions/y_hats.nc')
+    # The below setting needs to be glob for graphs and direct path for animations
+    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/labels/0000.nc')
+    ###### TEST DATA PLOTS SETTINGS #############
+    parser.add_argument('--hailcast_files', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
 
     return parser
 
@@ -354,7 +356,7 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
 
 # NOTE: This is only for binary case
 def plot_test_data_plots(args):
-    examples_glob = args["processed_examples"]
+    hailcast_files = args["hailcast_files"]
     labels_glob = args["unprocessed_labels"]
     plot_output_dir = args["plot_output_dir"]
     # predictions_paths = args["predictions_paths"]
@@ -369,18 +371,19 @@ def plot_test_data_plots(args):
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_30.nc",
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_45.nc",
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_55.nc"],
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/test/predictions/y_hats.nc"]
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/test_split/predictions/y_hats_2.nc",
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/test_split/predictions/y_hats_ens_2.nc"]
     # model_names = ["Deterministic Single 2D UNet", "Deterministic Multiple 2D UNets", "Deterministic Time-Resolving 3D UNet"]
-    model_names = ["Deterministic Time-Resolving 3D UNet"]
+    model_names = ["Deterministic Time-Resolving 3D UNet", "Ensemble Time-Resolving 3D UNet"]
     hail_name = "MESH_class_bin"
     lead_time_names_pretty = ["Init Plus 00", "Init Plus 15", "Init Plus 30", "Init Plus 45", "Init Plus 60"]
     lead_time_minutes = [0, 15, 30, 45, 55]
     lead_time_indices = [0, 3, 6, 9, 11]
 
     # Load all the xarray dataset objects
-    examples_list = glob.glob(examples_glob)
-    examples_list.sort()
-    examples_dataset = xr.open_mfdataset(examples_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
+    hailcast_list = glob.glob(hailcast_files)
+    hailcast_list.sort()
+    hailcast_dataset = xr.open_mfdataset(hailcast_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
     labels_list = glob.glob(labels_glob)
     labels_list.sort()
     labels_dataset = xr.open_mfdataset(labels_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
@@ -390,7 +393,7 @@ def plot_test_data_plots(args):
     # Load predictions and truths for each of the valid times
     truths_flattened = []
     predictions_flattened = []
-    for predictions_path in predictions_paths:
+    for j, predictions_path in enumerate(predictions_paths):
         predictions = []
         truths = []
 
@@ -400,7 +403,10 @@ def plot_test_data_plots(args):
             else:
                 predictions.append(xr.open_dataset(predictions_path)[{"time_dim": lead_time_index}][hail_name].to_numpy().ravel())
             
-            truth = unpack_ne_dim_output(labels_dataset[{"time_dim": lead_time_index}][hail_name].to_numpy(), 18, 1).ravel()
+            if "Ensemble" not in model_names[j]:
+                truth = unpack_ne_dim_output(labels_dataset[{"time_dim": lead_time_index}][hail_name].to_numpy(), 18, 1).ravel()
+            else:
+                truth = labels_dataset[{"time_dim": lead_time_index}][hail_name].to_numpy().ravel()
             truths.append(truth)
         
         truths_flattened.append(truths)
@@ -409,7 +415,7 @@ def plot_test_data_plots(args):
     # Load a hailcast list
     hailcast_flattened = []
     for lead_time_index in lead_time_indices:
-        hailcast_flattened.append(examples_dataset[{"time_dim": lead_time_index}]['hailcast'].to_numpy().ravel())
+        hailcast_flattened.append(hailcast_dataset[{"time_dim": lead_time_index}]['hailcast'].to_numpy().ravel())
 
     # Calculate max csi, calibration, and ROC for model data
     roc_auc_scores = []
@@ -446,7 +452,9 @@ def plot_test_data_plots(args):
     roc_curves_hailcast = []
     max_csis_hailcast = []
     calibration_curves_hailcast = []
-    for truth, hailcast in zip(truths_flattened[-1], hailcast_flattened):
+    # TODO: Make the below into something that intelligently finds which truths_flattened to use (hailcast currently is always "unpacked")
+    # rather than taking harcoded truths_flattened[0] because it is the one I happened to set that isn't an ensemble
+    for truth, hailcast in zip(truths_flattened[0], hailcast_flattened):
         roc_auc_scores_hailcast.append(roc_auc_score(truth, hailcast))
 
         fpr, tpr, thresholds = roc_curve(truth, hailcast)

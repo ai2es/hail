@@ -26,11 +26,11 @@ py3nvml.grab_gpus(num_gpus=4, gpu_select=[0,1,2,3])
 import tensorflow as tf
 
 # GPU check
-physical_devices = tf.config.list_physical_devices('GPU') 
-n_physical_devices = len(physical_devices)
-if(n_physical_devices > 0):
-    for device in physical_devices:
-        tf.config.experimental.set_memory_growth(device, True)
+# physical_devices = tf.config.list_physical_devices('GPU') 
+# n_physical_devices = len(physical_devices)
+# if(n_physical_devices > 0):
+#     for device in physical_devices:
+#         tf.config.experimental.set_memory_growth(device, True)
 
 import os
 import random
@@ -62,7 +62,7 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_string(
     "logdir",
-    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/tensorboard_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/saved_models_min_val_loss_3_plus_fixed_base_rate_relu/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -78,14 +78,14 @@ flags.DEFINE_integer(
 )
 
 # my params
-TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/tf_datasets/*"
-TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/val/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/checkpoints"
+TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train_300_bal/tf_datasets/*"
+TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/val_split/tf_datasets/*"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/saved_models_min_val_loss_3_plus_fixed_base_rate_relu/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/saved_models_min_val_loss_3_plus_fixed_base_rate_relu/checkpoints"
 # VAL_FRAC = 0.9 # Actually the train frac
-NUM_SAMPLES_IN_MEM = 28250
+NUM_SAMPLES_IN_MEM = 95500
 MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = True
-INPUT_SHAPE = (128,128,12,18) # Was (128,128,12,13) and then (128,128,12,18)
+INPUT_SHAPE = (64,64,12,18) # Was (128,128,12,13) and then (128,128,12,18)
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 1
@@ -94,22 +94,23 @@ PATIENCE = 3 # Was 4
 # TF_DATASET_FILE_SAMPLE_NUM = 8000
 IS_3D_DATA = True
 USE_MULTIPLE_GPUS = True
-RANDOM_SEED = 12414
+RANDOM_SEED = 120
+RUN_START_INDEX = 0
 
 #convolution params
 HP_CONV_LAYERS = hp.HParam("conv_layers", hp.IntInterval(1, 3))
 HP_CONV_KERNEL_SIZE = hp.HParam("conv_kernel_size", hp.Discrete([3, 5, 7]))
-HP_CONV_ACTIVATION = hp.HParam("conv_activation", hp.Discrete(['LeakyReLU']))
+HP_CONV_ACTIVATION = hp.HParam("conv_activation", hp.Discrete(['ReLU', 'ELU']))
 HP_CONV_KERNELS = hp.HParam('num_of_kernels', hp.Discrete([4,8,16,32]))
 HP_LOSS_WEIGHT = hp.HParam('loss_weights', hp.Discrete([2.0,3.0,4.0,5.0,7.0]))
-HP_FSS_RADII = hp.HParam('FSS_radii', hp.Discrete([2,3,4]))
+# HP_FSS_RADII = hp.HParam('FSS_radii', hp.Discrete([2,3,4]))
 
 #unet param
-HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([1,2,3])) # Was [1,2,3] and then [3,4,5]
+HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([3])) # Was [1,2,3] and then [3,4,5]
 HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam"]))
 HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy", "weighted_binary_crossentropy"]))
 HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
-HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256,512]))
+HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256])) # Also had 512
 HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([128])) # Was 512
 HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([1e-2,1e-3]))
 HP_L2_REG = hp.HParam('l2_reg', hp.Discrete([0.1, 0.05, 0.01, 0.005, 0.001, 0.0001, 0.00001]))
@@ -127,7 +128,7 @@ HPARAMS = [HP_CONV_LAYERS,
     HP_VAL_BATCHSIZE,
     HP_LEARNING_RATE,
     HP_LOSS_WEIGHT,
-    HP_FSS_RADII,
+    # HP_FSS_RADII,
     HP_L2_REG,
     HP_L1_REG
 ]
@@ -167,11 +168,11 @@ METRICS_SUMMARY = [
     ),
 ]
 
-def build_loss_dict(weight, FSS_radius):
+def build_loss_dict(weight):# , FSS_radius):
     loss_dict = {}
     loss_dict['binary_crossentropy'] = tf.keras.losses.BinaryCrossentropy(from_logits=False)
     loss_dict['weighted_binary_crossentropy'] = WeightedBinaryCrossEntropy(weights=[weight,1.0])
-    loss_dict['FSS'] = fractions_skill_score_loss(FSS_radius)
+    # loss_dict['FSS'] = fractions_skill_score_loss(FSS_radius)
     return loss_dict
 
 def build_metric_dict():
@@ -213,7 +214,7 @@ def model_fn(hparams, seed):
         with mirrored_strategy.scope():
             # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
             if IS_3D_DATA:
-                model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
                                 stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
                                 activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
                                 batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
@@ -224,7 +225,7 @@ def model_fn(hparams, seed):
                                 batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
             #compile losses: 
-            loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT], hparams[HP_FSS_RADII])
+            loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])# , hparams[HP_FSS_RADII])
             opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
             metric_dict = build_metric_dict()
             model.compile(
@@ -235,7 +236,7 @@ def model_fn(hparams, seed):
     else:
         # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
         if IS_3D_DATA:
-            model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+            model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
                             stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
                             activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
                             batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
@@ -246,7 +247,7 @@ def model_fn(hparams, seed):
                             batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
         #compile losses: 
-        loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT], hparams[HP_FSS_RADII])
+        loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])# , hparams[HP_FSS_RADII])
         opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
         metric_dict = build_metric_dict()
         model.compile(
@@ -324,13 +325,19 @@ def run(data, base_logdir, session_id, hparams):
 
     checkpoint_path = os.path.join(CHECKPOINTS_DIR, session_id)
     if IS_3D_DATA:
+        # checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
+        #                         monitor='val_max_csi_55', verbose=0, save_best_only=True, 
+        #                         save_weights_only=False, save_freq='epoch', mode="max")
         checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
-                                monitor='val_max_csi_55', verbose=0, save_best_only=True, 
-                                save_weights_only=False, save_freq='epoch', mode="max")
+                                monitor='val_loss', verbose=0, save_best_only=True, 
+                                save_weights_only=False, save_freq='epoch', mode="min")
     else:
+        # checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
+        #                         monitor='val_max_csi', verbose=0, save_best_only=True, 
+        #                         save_weights_only=False, save_freq='epoch', mode="max")
         checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
-                                monitor='val_max_csi', verbose=0, save_best_only=True, 
-                                save_weights_only=False, save_freq='epoch', mode="max")
+                                monitor='val_loss', verbose=0, save_best_only=True, 
+                                save_weights_only=False, save_freq='epoch', mode="min")
     
     callback_es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=PATIENCE, mode="min")
 
@@ -343,14 +350,14 @@ def run(data, base_logdir, session_id, hparams):
         if MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE:
             result = model.fit(ds_train,
                 epochs=flags.FLAGS.num_epochs,
-                shuffle=False,
+                shuffle=True,
                 validation_data=ds_val,
                 validation_freq = VALIDATION_FREQ,
                 callbacks=[callback, hparams_callback, checkpoint_callback, callback_es, callback_loss],verbose=1)
         else:
             result = model.fit(ds_train,
                 epochs=flags.FLAGS.num_epochs,
-                shuffle=False,
+                shuffle=True,
                 validation_data=ds_val,
                 validation_freq = VALIDATION_FREQ,
                 steps_per_epoch = NUM_SAMPLES_IN_MEM // hparams[HP_BATCHSIZE],
@@ -391,20 +398,21 @@ def run_all(logdir, verbose=False):
         hparams_string = str(hparams)
         for repeat_index in range(sessions_per_group):
             session_id = str(session_index)
-            session_index += 1
-            if verbose:
-                print(
-                    "--- Running training session %d/%d"
-                    % (session_index, num_sessions)
+            if session_index >= RUN_START_INDEX:
+                if verbose:
+                    print(
+                        "--- Running training session %d/%d"
+                        % (session_index, num_sessions)
+                    )
+                    print(hparams_string)
+                    print("--- repeat #: %d" % (repeat_index + 1))
+                run(
+                    data=data,
+                    base_logdir=logdir,
+                    session_id=session_id,
+                    hparams=hparams,
                 )
-                print(hparams_string)
-                print("--- repeat #: %d" % (repeat_index + 1))
-            run(
-                data=data,
-                base_logdir=logdir,
-                session_id=session_id,
-                hparams=hparams,
-            )
+            session_index += 1
 
 
 def main(unused_argv):

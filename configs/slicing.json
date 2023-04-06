@@ -1,0 +1,131 @@
+{
+    "slices_settings": [
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [3]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [4]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4,5]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [5]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4,5,6]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [6]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4,5,6,7]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [7]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4,5,6,7,8]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [8]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4,5,6,7,8,9]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [9]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4,5,6,7,8,9,10]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [10]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time"],
+                    "slices": [0,1,2,3,4,5,6,7,8,9,10,11]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin"],
+                    "slices": [11]
+                }
+            ]
+        }
+    ]
+    
+}

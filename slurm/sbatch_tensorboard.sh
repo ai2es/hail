@@ -16,6 +16,6 @@
 #SBATCH --array=0-0
 #
 #################################################
-/home/tgschmidt/tf_gpu_env/bin/tensorboard --logdir="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/saved_models_min_val_loss_3_plus_fixed_base_rate_relu/tensorboard_logdir" --port=6065 --bind_all
+/home/tgschmidt/tf_gpu_env/bin/tensorboard --logdir="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch/saved_models/tensorboard_logdir" --port=6065 --bind_all
 
 

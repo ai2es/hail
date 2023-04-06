@@ -2,16 +2,35 @@ import xarray as xr
 import numpy as np
 import glob
 import os
+import argparse
 
-EXAMPLES_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train_300_bal/examples/*"
-LABELS_NETCDF_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train_300_bal/labels/*"
-MIN_MAX_FILES_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/mins_maxs"
+
 EXAMPLE_VARS_TO_DROP = ["time"]
 LABEL_VARS_TO_DROP = ["time"]
 
-examples_files = glob.glob(EXAMPLES_NETCDF_GLOB)
+
+def create_parser():
+    '''
+    Create argument parser
+    '''
+    # Parse the command-line arguments
+    parser = argparse.ArgumentParser(description='Data Splitting', fromfile_prefix_chars='@')
+
+    parser.add_argument('--examples_glob', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0004/train/examples/*")
+    parser.add_argument('--labels_glob', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0004/train/labels/*")
+    parser.add_argument('--min_maxs_dir', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0004/mins_maxs")
+
+    return parser
+
+
+# Perform all the argument parsing
+parser = create_parser()
+args = parser.parse_args()
+args = vars(args)
+
+examples_files = glob.glob(args["examples_glob"])
 examples_files.sort()
-labels_files = glob.glob(LABELS_NETCDF_GLOB)
+labels_files = glob.glob(args["labels_glob"])
 labels_files.sort()
 
 one_examples_ds = xr.open_dataset(examples_files[0])
@@ -57,7 +76,7 @@ examples_min_ds = xr.Dataset(data_vars=dict(zip(example_keys, examples_min)))
 labels_max_ds = xr.Dataset(data_vars=dict(zip(label_keys, labels_max)))
 labels_min_ds = xr.Dataset(data_vars=dict(zip(label_keys, labels_min)))
 
-examples_max_ds.to_netcdf(os.path.join(MIN_MAX_FILES_DIR, "examples_max.nc"))
-examples_min_ds.to_netcdf(os.path.join(MIN_MAX_FILES_DIR, "examples_min.nc"))
-labels_max_ds.to_netcdf(os.path.join(MIN_MAX_FILES_DIR, "labels_max.nc"))
-labels_min_ds.to_netcdf(os.path.join(MIN_MAX_FILES_DIR, "labels_min.nc"))
+examples_max_ds.to_netcdf(os.path.join(args["min_maxs_dir"], "examples_max.nc"))
+examples_min_ds.to_netcdf(os.path.join(args["min_maxs_dir"], "examples_min.nc"))
+labels_max_ds.to_netcdf(os.path.join(args["min_maxs_dir"], "labels_max.nc"))
+labels_min_ds.to_netcdf(os.path.join(args["min_maxs_dir"], "labels_min.nc"))

@@ -32,6 +32,9 @@ import tensorflow as tf
 #     for device in physical_devices:
 #         tf.config.experimental.set_memory_growth(device, True)
 
+tf.config.threading.set_intra_op_parallelism_threads(16)
+tf.config.threading.set_inter_op_parallelism_threads(16)
+
 import os
 import random
 import shutil
@@ -62,7 +65,7 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_string(
     "logdir",
-    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/saved_models_min_val_loss_3_plus_fixed_base_rate_relu/tensorboard_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/saved_models_fold_0004/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -78,24 +81,25 @@ flags.DEFINE_integer(
 )
 
 # my params
-TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train_300_bal/tf_datasets/*"
-TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/val_split/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/saved_models_min_val_loss_3_plus_fixed_base_rate_relu/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/saved_models_min_val_loss_3_plus_fixed_base_rate_relu/checkpoints"
+TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0004/train/tf_datasets/*"
+TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0004/val/tf_datasets/*"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/saved_models_fold_0004/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/saved_models_fold_0004/checkpoints"
 # VAL_FRAC = 0.9 # Actually the train frac
-NUM_SAMPLES_IN_MEM = 95500
+NUM_SAMPLES_IN_MEM = 43007 # fold 3 was 43463 fold 2 was 44060 fold 1 was 43624 fold 0 was 43186
 MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = True
 INPUT_SHAPE = (64,64,12,18) # Was (128,128,12,13) and then (128,128,12,18)
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 1
 # STEPS_PER_EPOCH = 20
-PATIENCE = 3 # Was 4
+PATIENCE = 4 # Was 3
 # TF_DATASET_FILE_SAMPLE_NUM = 8000
 IS_3D_DATA = True
 USE_MULTIPLE_GPUS = True
-RANDOM_SEED = 120
-RUN_START_INDEX = 0
+RANDOM_SEED = 5678
+RUN_START_INDEX = 36
+RUN_SINGLE_MODEL = True
 
 #convolution params
 HP_CONV_LAYERS = hp.HParam("conv_layers", hp.IntInterval(1, 3))
@@ -398,7 +402,7 @@ def run_all(logdir, verbose=False):
         hparams_string = str(hparams)
         for repeat_index in range(sessions_per_group):
             session_id = str(session_index)
-            if session_index >= RUN_START_INDEX:
+            if (not RUN_SINGLE_MODEL and session_index >= RUN_START_INDEX) or (RUN_SINGLE_MODEL and session_index == RUN_START_INDEX):
                 if verbose:
                     print(
                         "--- Running training session %d/%d"

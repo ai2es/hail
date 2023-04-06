@@ -6,11 +6,11 @@ import numpy as np
 ###################
 ALL_LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch/patches/train/labels/*"
 OUTPUT_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch/images/test_dataset_plots/hist_train.png"
-DATA_HAD_NE_DIM = True
+DATA_HAD_NE_DIM = False
 ###################
 TRAIN_LABELS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train/labels/*"
 ###################
-PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/test_split/labels/*"
+PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/labels/*"
 ###################
 
 
@@ -66,4 +66,22 @@ def find_total_base_rate(path_glob):
     print(np.sum(gridrad_bin)/len(gridrad_bin))
 
 
-find_total_base_rate(PATH_GLOB)
+def check_num_of_storm_days(path_glob):
+    file_list = glob.glob(path_glob)
+    file_list.sort()
+    label_ds = xr.open_mfdataset(file_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
+
+    all_times = np.sort(label_ds["time"].to_numpy().flatten())
+
+    previous_time = np.datetime64('2000-01-01')
+    num_of_storm_days = 0
+    for time in all_times:
+        if time - np.timedelta64(6,'h') >= previous_time:
+            num_of_storm_days = num_of_storm_days + 1
+        
+        previous_time = time
+    
+    print(num_of_storm_days)
+
+
+check_num_of_storm_days(PATH_GLOB)

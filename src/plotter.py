@@ -29,16 +29,16 @@ def create_parser():
     parser.add_argument('--init_datetime', type=str, default='2019-05-20:2000') # Was '2019-05-01:1900'
     parser.add_argument('--ens_member', type=int, default=1)
     parser.add_argument('--ens_size', type=int, default=18)
-    parser.add_argument('--num_patches_per_col', type=int, default=2)
-    parser.add_argument('--num_patches_per_row', type=int, default=2)
-    parser.add_argument('--unprocessed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
+    parser.add_argument('--num_patches_per_col', type=int, default=4)
+    parser.add_argument('--num_patches_per_row', type=int, default=4)
+    parser.add_argument('--unprocessed_examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190520/unprocessed/examples/0000.nc')
     ###### BOTH SETTINGS ##############
     parser.add_argument('--plot_animation', '-a', action='store_true')
     parser.add_argument('--include_reports', '-i', action='store_true')
-    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/images/animations')
+    parser.add_argument('--plot_output_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/images/animations')
     parser.add_argument('--predictions_paths', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour_fixed/patches/test/init_plus_00/predictions/y_hats.nc')
     # The below setting needs to be glob for graphs and direct path for animations
-    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/labels/0000.nc')
+    parser.add_argument('--unprocessed_labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190520/unprocessed/labels/0000.nc')
     ###### TEST DATA PLOTS SETTINGS #############
     parser.add_argument('--hailcast_files', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/unprocessed/examples/0000.nc')
 
@@ -61,15 +61,15 @@ def plot_casestudy_plots(args):
     init_datetime = datetime.strptime(init_datetime, "%Y-%m-%d:%H%M")
 
     ######## TEMP #################
-    # predictions_paths = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190501/predictions/y_hats_*")
+    # predictions_paths = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190501/predictions/y_hats_*")
     # predictions_paths.sort()
     # predictions_paths = [predictions_paths]
-    # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190501/predictions/y_hats.nc"]
+    # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190501/predictions/y_hats.nc"]
 
     # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190520/predictions/y_hats.nc"]
-    predictions_paths = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/animations/20190520/predictions/y_hats_*")
-    predictions_paths.sort()
-    predictions_paths = [predictions_paths]
+    predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190520/predictions/y_hats.nc"]
+    # predictions_paths.sort()
+    # predictions_paths = [predictions_paths]
     ##################################
 
     # NOTE: # This block had to keep decode=False for legacy reasons. So the latlons could be put directly into the numpy arrays without losing them.
@@ -246,8 +246,9 @@ def domain_refl_plot(plot_output_dir, lons, lats, comp_dz, pred_val, init_dateti
     # Add actual plots
     plt.contourf(lons,lats,comp_dz,np.arange(5, 76, 1), vmin = 5, vmax = 75, cmap=my_cmap, transform=ccrs.PlateCarree(), zorder=10)
     plt.colorbar(fraction=0.043, pad=0.07, ticks = np.arange(5,76,5)).set_label(label=comp_dz_label,size=30)
-    plt.contour(lons,lats,pred_val,np.arange(0,101,10)/100, colors='k', transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=1, zorder=11)
-    plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(0,101,10)/100).set_label(label=pred_val_label,size=30)
+    # was np.arange(0,101,10)/100 and vmin 0/1
+    plt.contour(lons,lats,pred_val,np.arange(0,21,2)/100, colors='k', transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=0.2, zorder=11)
+    plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(0,21,2)/100).set_label(label=pred_val_label,size=30)
 
     if include_reports:
         loader = StormReportLoader("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/storm_reports/20190501/STORM_EVENTS_2019-2019.csv", "NOAA", init_datetime.strftime("%Y%m%d%H%M"), plot_num*5, 0)
@@ -272,7 +273,7 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
     hailcast_label = "Deterministic WoFS Hailcast Location of Hail > 10 mm"
 
     hailcast_bin = np.zeros(hailcast.shape)
-    hailcast_bin[hailcast > 0.393701] = 1
+    hailcast_bin[hailcast > 1] = 1 # was 0.393701
     hailcast = hailcast_bin
     hailcast[np.nonzero(hailcast == 0)] = np.nan
 
@@ -329,16 +330,10 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
     # Add actual plots
     true_val[np.nonzero(true_val == 0)] = np.nan
     plt.contourf(lons,lats,true_val, [0, 1], colors='red', transform=ccrs.PlateCarree(), zorder=10, alpha=0.8)
-    # cbar = plt.colorbar(fraction=0.043, pad=0.03)
-    # cbar.set_ticks([])
-    # cbar.set_label(label=real_val_label,size=20)
     plt.contourf(lons,lats,hailcast, [0, 1], colors='blue', transform=ccrs.PlateCarree(), zorder=11, alpha=0.8)
-    # cbar = plt.colorbar(fraction=0.043, pad=0.06)
-    # cbar.set_ticks([])
-    # cbar.set_label(label=hailcast_label,size=20)
-    plt.contourf(lons,lats,pred_val,np.arange(10,101,10)/100, cmap="Greens", transform=ccrs.PlateCarree(), vmin=0.1, vmax=1, zorder=12, alpha=0.8)
-    # plt.colorbar(fraction=0.043, pad=0.07, ticks = np.arange(10,101,10)/100).set_label(label=pred_val_label,size=20)
-    plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(10,101,10)/100).set_label(label=pred_val_label,size=30) #Changed padding here since other colorbars removed
+    # was np.arange(10,101,10)/100 and vmin/vmax 0.1/1
+    plt.contourf(lons,lats,pred_val,np.arange(2,21,2)/100, cmap="Greens", transform=ccrs.PlateCarree(), vmin=0.02, vmax=0.2, zorder=12, alpha=0.8)
+    plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(2,21,2)/100).set_label(label=pred_val_label,size=30) #Changed padding here since other colorbars removed
 
 
     if include_reports:
@@ -371,10 +366,11 @@ def plot_test_data_plots(args):
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_30.nc",
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_45.nc",
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_55.nc"],
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/test_split/predictions/y_hats_2.nc",
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/test_split/predictions/y_hats_ens_2.nc"]
+                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats.nc"]
+                        # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0000/log_reg_files/predictions/y_hats.nc"]
+                        # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/test_split/predictions/y_hats_ens_2.nc"]
     # model_names = ["Deterministic Single 2D UNet", "Deterministic Multiple 2D UNets", "Deterministic Time-Resolving 3D UNet"]
-    model_names = ["Deterministic Time-Resolving 3D UNet", "Ensemble Time-Resolving 3D UNet"]
+    model_names = ["Deterministic Time-Resolving 3D UNet"] #, "UH 2-5 Logistic Regression"]#, "Ensemble Time-Resolving 3D UNet"]
     hail_name = "MESH_class_bin"
     lead_time_names_pretty = ["Init Plus 00", "Init Plus 15", "Init Plus 30", "Init Plus 45", "Init Plus 60"]
     lead_time_minutes = [0, 15, 30, 45, 55]
@@ -483,33 +479,35 @@ def plot_test_data_plots(args):
     plt.tight_layout()
     plt.savefig(os.path.join(plot_output_dir, 'max_csi.png'), bbox_inches='tight')
 
-    # # Make the ROC plot
-    # fig = plt.figure(figsize=(16, 12), dpi=300)
-    # fig.patch.set_facecolor('white')
-    # plt.plot([0,1], [0,1], linestyle='--', label='No Skill: AUC=%.3f' % (0.5))
-    # for roc_auc_score_value, roc_auc_score_hailcast_value, roc_curve_value, roc_curve_hailcast_value, lead_time_name in zip(roc_auc_scores, roc_auc_scores_hailcast, roc_curves, roc_curves_hailcast, lead_time_names_pretty):
-    #     plt.plot(roc_curve_value[0], roc_curve_value[1], linestyle='-', label="ML Hail " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_value))
-    #     plt.plot(roc_curve_hailcast_value[0], roc_curve_hailcast_value[1], linestyle='-.', label="Hailcast " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_hailcast_value), color=plt.gca().lines[-1].get_color())
-    # plt.xlabel('False Positive Rate', size=20)
-    # plt.ylabel('True Positive Rate', size=20)
-    # plt.title('Receiver Operating Characteristic Curve', size=20)
-    # plt.legend(prop={'size': 25})
-    # plt.tight_layout()
-    # plt.savefig(os.path.join(plot_output_dir, 'ROC_Curve.png'), bbox_inches='tight')
+    # Make the ROC plot
+    fig = plt.figure(figsize=(16, 12), dpi=300)
+    fig.patch.set_facecolor('white')
+    plt.plot([0,1], [0,1], linestyle='--', c='k', label='No Skill: AUC=%.3f' % (0.5))
+    # TODO: REMOVE HARDCODED "0's" in if
+    for roc_auc_score_value, roc_auc_score_hailcast_value, roc_curve_value, roc_curve_hailcast_value, lead_time_name in zip(roc_auc_scores[0], roc_auc_scores_hailcast, roc_curves[0], roc_curves_hailcast, lead_time_names_pretty):
+        plt.plot(roc_curve_value[0], roc_curve_value[1], linestyle='-', linewidth=6, label="ML Hail " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_value))
+        plt.plot(roc_curve_hailcast_value[0], roc_curve_hailcast_value[1], linestyle='-.', linewidth=6, label="Hailcast " + lead_time_name + ': AUC=%.3f' % (roc_auc_score_hailcast_value), color=plt.gca().lines[-1].get_color())
+    plt.xlabel('False Positive Rate', size=48)
+    plt.ylabel('True Positive Rate', size=48)
+    plt.title('Receiver Operating Characteristic Curve', size=48)
+    plt.legend(prop={'size': 25})
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_output_dir, 'ROC_Curve.png'), bbox_inches='tight')
 
-    # # Make the calibration plot
-    # fig = plt.figure(figsize=(16, 12), dpi=300)
-    # fig.patch.set_facecolor('white')
-    # plt.plot([0,1], linestyle='--')
-    # for calibration_curve_val, calibration_curve_hailcast_val, lead_time_name in zip(calibration_curves, calibration_curves_hailcast, lead_time_names_pretty):
-    #     plt.plot(calibration_curve_val[0], calibration_curve_val[1], linestyle='-', label="ML Hail " + lead_time_name)
-    #     plt.plot(calibration_curve_hailcast_val[0], calibration_curve_hailcast_val[1], linestyle='-.', label="Hailcast " + lead_time_name, color=plt.gca().lines[-1].get_color())
-    # plt.ylabel("Observed Frequency", size=20)
-    # plt.xlabel("Predicted Probability", size=20)
-    # plt.title("Reliability Diagram", size=20)
-    # plt.legend(loc="best", prop={'size': 25})
-    # plt.tight_layout()
-    # plt.savefig(os.path.join(plot_output_dir, 'Reliability_Diagram.png'), bbox_inches='tight')
+    # Make the calibration plot
+    fig = plt.figure(figsize=(16, 12), dpi=300)
+    fig.patch.set_facecolor('white')
+    plt.plot([0,1], linestyle='--', c='k')
+    # TODO: REMOVE HARDCODED "0's" in if
+    for calibration_curve_val, calibration_curve_hailcast_val, lead_time_name in zip(calibration_curves[0], calibration_curves_hailcast, lead_time_names_pretty):
+        plt.plot(calibration_curve_val[0], calibration_curve_val[1], linestyle='-', linewidth=6, label="ML Hail " + lead_time_name)
+        plt.plot(calibration_curve_hailcast_val[0], calibration_curve_hailcast_val[1], linestyle='-.', linewidth=6, label="Hailcast " + lead_time_name, color=plt.gca().lines[-1].get_color())
+    plt.ylabel("Observed Frequency", size=48)
+    plt.xlabel("Predicted Probability", size=48)
+    plt.title("Reliability Diagram", size=48)
+    plt.legend(loc="best", prop={'size': 25})
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_output_dir, 'Reliability_Diagram.png'), bbox_inches='tight')
 
 
 if __name__ == "__main__":

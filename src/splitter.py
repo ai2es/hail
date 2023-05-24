@@ -7,14 +7,15 @@ from sklearn.model_selection import StratifiedGroupKFold
 import argparse
 
 
-SECOND_DS_SIZE = 0.2
-EXAMPLES_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/examples/*"
-LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/labels/*"
-FIRST_DS_OUTPUT = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainval"
-SECOND_DS_OUTPUT = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/test/unprocessed"
-NUM_OUTPUT_FILES = (60,20)
-N_FOLDS = 5
-FOLD_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds"
+# SECOND_DS_SIZE = 0.2
+# EXAMPLES_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/examples/*"
+# LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/labels/*"
+# FIRST_DS_OUTPUT = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainval"
+# SECOND_DS_OUTPUT = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/test/unprocessed"
+# NUM_OUTPUT_FILES = (60,20)
+# N_FOLDS = 5
+# FOLD_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds"
+MESH_NAME = "MESH_class_bin" # Was MESH_class_bin_0
 
 
 def cluster_by_storm_event(labels):
@@ -37,7 +38,7 @@ def get_group_positions(labels, storm_groups, second_ds_size_or_n_folds, is_cros
         if type(second_ds_size_or_n_folds) is not float:
             raise Exception("For the single dataset splitting case you must give a float to represent the size of the second dataset.")
 
-    labels = labels["MESH_class_bin"].drop(["time","lon","lat"]).to_numpy()
+    labels = labels[MESH_NAME].drop(["time","lon","lat"], errors="ignore").to_numpy()
 
     for i in np.arange(1,len(labels.shape)):
         storm_groups = np.expand_dims(storm_groups, -1)
@@ -211,10 +212,10 @@ def split_verification(first_ds_labels, second_ds_labels, first_ds_groups, secon
     
     print("First dataset number of unique storm days: " + str(len(np.unique(first_ds_groups))))
     print("Second dataset number of unique storm days: " + str(len(np.unique(second_ds_groups))))
-    print("First dataset total number of hail labels: " + str(np.sum(first_ds_labels["MESH_class_bin"].to_numpy())))
-    print("Second dataset total number of hail labels: " + str(np.sum(second_ds_labels["MESH_class_bin"].to_numpy())))
-    print("First dataset base rate: " + str(np.mean(first_ds_labels["MESH_class_bin"].to_numpy())))
-    print("Second dataset base rate: " + str(np.mean(second_ds_labels["MESH_class_bin"].to_numpy())))
+    print("First dataset total number of hail labels: " + str(np.sum(first_ds_labels[MESH_NAME].to_numpy())))
+    print("Second dataset total number of hail labels: " + str(np.sum(second_ds_labels[MESH_NAME].to_numpy())))
+    print("First dataset base rate: " + str(np.mean(first_ds_labels[MESH_NAME].to_numpy())))
+    print("Second dataset base rate: " + str(np.mean(second_ds_labels[MESH_NAME].to_numpy())))
 
 
 def create_parser():
@@ -224,11 +225,16 @@ def create_parser():
     # Parse the command-line arguments
     parser = argparse.ArgumentParser(description='Data Splitting', fromfile_prefix_chars='@')
 
-    parser.add_argument('--examples_glob', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/examples/*")
-    parser.add_argument('--labels_glob', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/labels/*")
+    parser.add_argument('--examples_glob', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/trainvaltest/examples/*")
+    parser.add_argument('--labels_glob', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/trainvaltest/labels/*")
     parser.add_argument('--fold_path', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds")
-    parser.add_argument('--num_putput_files', type=int, default=30)
+    parser.add_argument('--first_ds_output', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/trainval")
+    parser.add_argument('--second_ds_output', type=str, default="/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/unprocessed")
+    parser.add_argument('--second_ds_size', type=float, default=0.2)
+    parser.add_argument('--num_output_files', type=int, default=30)
+    parser.add_argument('--num_output_files_tup', type=tuple, default=(40,10))
     parser.add_argument('--n_folds', type=int, default=5)
+    parser.add_argument('--random_seed', type=int, default=3627)
 
     return parser
 
@@ -238,7 +244,10 @@ if __name__ == "__main__":
     parser = create_parser()
     args = parser.parse_args()
     args = vars(args)
+    
+    np.random.seed(args["random_seed"])
 
     stratified_kfold_cross_val(args["examples_glob"], args["labels_glob"], args["fold_path"], args["num_output_files"], args["n_folds"])
+    # split_dataset_no_stratification(args["examples_glob"], args["labels_glob"], args["first_ds_output"], args["second_ds_output"], args["num_output_files_tup"], args["second_ds_size"])
 
 

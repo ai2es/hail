@@ -366,7 +366,8 @@ def plot_test_data_plots(args):
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_30.nc",
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_45.nc",
                         #  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats_55.nc"],
-                         "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields/patches/test/predictions/y_hats.nc"]
+                        "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/test/predictions/y_hats.nc"]
+                        # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/test/predictions/y_hats_flattened.nc"]
                         # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0000/log_reg_files/predictions/y_hats.nc"]
                         # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/test_split/predictions/y_hats_ens_2.nc"]
     # model_names = ["Deterministic Single 2D UNet", "Deterministic Multiple 2D UNets", "Deterministic Time-Resolving 3D UNet"]

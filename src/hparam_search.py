@@ -18,24 +18,27 @@ runs much faster, using synthetic data instead of actually training
 MNIST models.
 """
 
-import py3nvml
-
-# Grab your prefered GPU
-py3nvml.grab_gpus(num_gpus=4, gpu_select=[0,1,2,3])
-
 import tensorflow as tf
-
-# GPU check
-# physical_devices = tf.config.list_physical_devices('GPU') 
-# n_physical_devices = len(physical_devices)
-# if(n_physical_devices > 0):
-#     for device in physical_devices:
-#         tf.config.experimental.set_memory_growth(device, True)
-
-tf.config.threading.set_intra_op_parallelism_threads(16)
-tf.config.threading.set_inter_op_parallelism_threads(16)
-
 import os
+
+# This block grabs my GPUs
+if "CUDA_VISIBLE_DEVICES" in os.environ.keys():
+    # Fetch list of logical GPUs that have been allocated
+    #  Will always be numbered 0, 1, …
+    physical_devices = tf.config.get_visible_devices('GPU')
+    n_physical_devices = len(physical_devices)
+
+    # Set memory growth for each
+    for device in physical_devices:
+        tf.config.experimental.set_memory_growth(device, True)
+else:
+	# No allocated GPUs: do not delete this case!                                                                	 
+    tf.config.set_visible_devices([], 'GPU')
+
+tf.config.threading.set_intra_op_parallelism_threads(32)
+tf.config.threading.set_inter_op_parallelism_threads(32)
+
+
 import random
 import shutil
 from absl import app
@@ -60,12 +63,12 @@ if int(tf.__version__.split(".")[0]) < 2:
 
 flags.DEFINE_integer(
     "num_session_groups",
-    500, # Was 300
+    1500, # Was 300
     "The approximate number of session groups to create.",
 )
 flags.DEFINE_string(
     "logdir",
-    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/saved_models_fold_0004/tensorboard_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_nogaus/fold_0000/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -76,30 +79,28 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_integer(
     "num_epochs",
-    50, # was 50 and then 1500
+    80, # was 150 for multi-2d-case!
     "Number of epochs per trial.",
 )
 
 # my params
-TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0004/train/tf_datasets/*"
-TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0004/val/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/saved_models_fold_0004/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/saved_models_fold_0004/checkpoints"
-# VAL_FRAC = 0.9 # Actually the train frac
-NUM_SAMPLES_IN_MEM = 43007 # fold 3 was 43463 fold 2 was 44060 fold 1 was 43624 fold 0 was 43186
+TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/cv_folds/fold_0000/train/tf_datasets/*"
+TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/cv_folds/fold_0000/val/tf_datasets/*"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_nogaus/fold_0000/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_nogaus/fold_0000/checkpoints"
+# Was 71370 for fold 0004 72144 for fold 0003 72036 for fold 0002 72414 for fold 0001 and 71316 for fold 0000
+NUM_SAMPLES_IN_MEM = 60624 
 MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = True
-INPUT_SHAPE = (64,64,12,18) # Was (128,128,12,13) and then (128,128,12,18)
+INPUT_SHAPE = (64,64,12,19) # Was (128,128,12,13) and then (128,128,12,18) and (64,64,12,18)
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 1
-# STEPS_PER_EPOCH = 20
-PATIENCE = 4 # Was 3
-# TF_DATASET_FILE_SAMPLE_NUM = 8000
+PATIENCE = 4 # Was 3 for multi-2d-case!
 IS_3D_DATA = True
 USE_MULTIPLE_GPUS = True
-RANDOM_SEED = 5678
-RUN_START_INDEX = 36
-RUN_SINGLE_MODEL = True
+RANDOM_SEED = 3489 # Was 5690
+RUN_START_INDEX = 0
+RUN_SINGLE_MODEL = False
 
 #convolution params
 HP_CONV_LAYERS = hp.HParam("conv_layers", hp.IntInterval(1, 3))
@@ -110,10 +111,11 @@ HP_LOSS_WEIGHT = hp.HParam('loss_weights', hp.Discrete([2.0,3.0,4.0,5.0,7.0]))
 # HP_FSS_RADII = hp.HParam('FSS_radii', hp.Discrete([2,3,4]))
 
 #unet param
-HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([3])) # Was [1,2,3] and then [3,4,5]
-HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam"]))
+HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([1,2,3])) # Was [1,2,3,4,5] for or multi-2d-case!
+HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam", "adagrad", "sgd", "rmsprop"]))
 HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy", "weighted_binary_crossentropy"]))
 HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
+HP_3PLUS = hp.HParam('3plus', hp.Discrete([False, True]))
 HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256])) # Also had 512
 HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([128])) # Was 512
 HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([1e-2,1e-3]))
@@ -128,6 +130,7 @@ HPARAMS = [HP_CONV_LAYERS,
     HP_OPTIMIZER,
     HP_LOSS,
     HP_BATCHNORM,
+    HP_3PLUS,
     HP_BATCHSIZE,
     HP_VAL_BATCHSIZE,
     HP_LEARNING_RATE,
@@ -218,15 +221,27 @@ def model_fn(hparams, seed):
         with mirrored_strategy.scope():
             # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
             if IS_3D_DATA:
-                model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
-                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
-                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
+                if hparams[HP_3PLUS]:
+                    model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                    stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                    activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                    batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
+                else:
+                    model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                    stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                    activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                    batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
             else:
-                model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
-                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
-                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
+                if hparams[HP_3PLUS]:
+                    model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                    stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                    activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                    batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
+                else:
+                    model = models.unet_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                    stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                    activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                    batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
             #compile losses: 
             loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])# , hparams[HP_FSS_RADII])
@@ -240,15 +255,27 @@ def model_fn(hparams, seed):
     else:
         # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
         if IS_3D_DATA:
-            model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
-                            stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
-                            activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                            batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
+            if hparams[HP_3PLUS]:
+                model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
+            else:
+                model = models.unet_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet', collapse=False)
         else:
-            model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
-                            stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
-                            activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
-                            batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
+            if hparams[HP_3PLUS]:
+                model = models.unet_3plus_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
+            else:
+                model = models.unet_2d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
+                                stack_num_down=hparams[HP_CONV_LAYERS], stack_num_up=hparams[HP_CONV_LAYERS],
+                                activation=hparams[HP_CONV_ACTIVATION], output_activation=OUTPUT_ACTIVATION, weights=None,
+                                batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
         #compile losses: 
         loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])# , hparams[HP_FSS_RADII])
@@ -357,7 +384,7 @@ def run(data, base_logdir, session_id, hparams):
                 shuffle=True,
                 validation_data=ds_val,
                 validation_freq = VALIDATION_FREQ,
-                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es, callback_loss],verbose=1)
+                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es, callback_loss],verbose=0)
         else:
             result = model.fit(ds_train,
                 epochs=flags.FLAGS.num_epochs,
@@ -365,7 +392,7 @@ def run(data, base_logdir, session_id, hparams):
                 validation_data=ds_val,
                 validation_freq = VALIDATION_FREQ,
                 steps_per_epoch = NUM_SAMPLES_IN_MEM // hparams[HP_BATCHSIZE],
-                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es, callback_loss],verbose=1)
+                callbacks=[callback, hparams_callback, checkpoint_callback, callback_es, callback_loss],verbose=0)
     except:
         warnings.warn("Had to skip training a model because it raised an exception!")
         return
@@ -400,6 +427,9 @@ def run_all(logdir, verbose=False):
     for group_index in range(flags.FLAGS.num_session_groups):
         hparams = {h: h.domain.sample_uniform(rng) for h in HPARAMS}
         hparams_string = str(hparams)
+        if hparams[HP_3PLUS] and hparams[HP_UNET_DEPTH] < 3 and not RUN_SINGLE_MODEL:
+            session_index += 1
+            continue
         for repeat_index in range(sessions_per_group):
             session_id = str(session_index)
             if (not RUN_SINGLE_MODEL and session_index >= RUN_START_INDEX) or (RUN_SINGLE_MODEL and session_index == RUN_START_INDEX):

@@ -7,6 +7,50 @@ import numpy as np
 import time
 
 
+class GaussianLabelExpander:
+    """
+    Assumes that each array dimension is of at least size 2.
+    To use simply instantiate and then call gaussian_expand with your array along with the axes you want to apply the expansions across (any shape/dimension supported).
+    Examples: 
+    2D gaussian: expander = GaussianLabelExpander()
+                 expanded_array = expander.gaussian_expand(array, [1,2]) for say a dataset with shape (n_samples,x,y)
+    3D gaussian: expander = GaussianLabelExpander()
+                 expanded_array = expander.gaussian_expand(array, [1,2,3]) for say a dataset with shape (n_samples,x,y,time)
+    """
+    def _gaussian_value_setter(self, current_value, neighbour_value):
+        if neighbour_value == 1 and current_value < 0.66:
+            return 0.66
+        elif neighbour_value == 0.66 and current_value < 0.33:
+            return 0.33
+        else:
+            return current_value
+
+    def _gaussian_expand_one_axis(self, array_1d):
+        for i in range(len(array_1d)):
+            if array_1d[i] == 1:
+                continue
+
+            if i == 0:
+                array_1d[i] = self._gaussian_value_setter(array_1d[i], array_1d[i+1])
+            elif i == len(array_1d) - 1:
+                array_1d[i] = self._gaussian_value_setter(array_1d[i], array_1d[i-1])
+            else:
+                largest_neighbour = np.maximum(array_1d[i-1], array_1d[i+1])
+                array_1d[i] = self._gaussian_value_setter(array_1d[i], largest_neighbour)
+        
+        return array_1d
+
+    def _gaussian_expand_any_axis(self, array_sliced, axis):
+        return np.apply_along_axis(self._gaussian_expand_one_axis, axis, array_sliced)
+
+    def gaussian_expand(self, array, axes):        
+        # This is called twice because the maximum radius (not including 1's at center) of the gaussian for this 0.33/0.66 case is 2.
+        array = np.apply_over_axes(self._gaussian_expand_any_axis, array, axes=axes)
+        array = np.apply_over_axes(self._gaussian_expand_any_axis, array, axes=axes)
+
+        return array
+
+
 def create_parser():
     '''
     Create argument parser
@@ -17,9 +61,11 @@ def create_parser():
     parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/examples/*')
     parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/labels*')
     parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/tf_datasets')
-    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds/fold_0000/mins_maxs')
-    parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', 'time']) # Use to have hailcast
-    parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH95'])
+    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/mins_maxs')
+    parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', 'time', "time_0", "time_1", "time_2", "time_3", "time_4", "time_5", "time_6", "time_7", "time_8", "time_9", "time_10", "time_11", "time_12"]) # Use to have hailcast
+    parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH95', 'MESH95_0', "time_0", "time_1", "time_2", "time_3", "time_4", "time_5", "time_6", "time_7", "time_8", "time_9", "time_10", "time_11", "time_12"])
+    parser.add_argument('--input_vars_that_must_repeat', type=str, nargs='+', default=['strikes'])
+    parser.add_argument('--label_class_name_str', type=str, default='MESH_class_bin') # Was MESH_class_bin_0
     parser.add_argument('--approx_file_clumping_num', type=int, default=None) # Was 3
     parser.add_argument('--n_parallel_runs', type=int, default=None) # Was 15
     parser.add_argument('--run_num', type=int, default=0)
@@ -35,6 +81,7 @@ def create_parser():
     parser.add_argument('--remove_patches_with_nans', '-r', action='store_true')
     parser.add_argument('--data_is_3D', '-t', action='store_true')
     parser.add_argument('--unpack_ne', '-u', action='store_true')
+    parser.add_argument('--apply_gaus', '-g', action='store_true')
     # parser.add_argument('--unpack_3D', '-u', action='store_true')
 
     return parser
@@ -107,6 +154,9 @@ if __name__ == "__main__":
     data_is_3D = args["data_is_3D"]
     selected_time = args["selected_time"]
     unpack_ne = args["unpack_ne"]
+    apply_gaus = args["apply_gaus"]
+    label_class_name_str = args["label_class_name_str"]
+    input_vars_that_must_repeat = args["input_vars_that_must_repeat"]
 
     input_files = glob.glob(netcdf_examples_dir)
     input_files.sort()
@@ -185,10 +235,13 @@ if __name__ == "__main__":
             output_ds = new_output_ds
 
             for key in input_keys:
-                new_dim = list(input_ds[key].dims)
-                new_dim.pop(ne_dim_num)
-                new_dim = tuple(new_dim)
-                new_input_ds = new_input_ds.assign({key: (new_dim, unpack_ne_dim_input(input_ds[key].data, ne_dim_num))})
+                if key in input_vars_that_must_repeat:
+                    new_input_ds = new_input_ds.assign({key: (input_ds[key].dims, unpack_ne_dim_output(input_ds[key].data, ne_dim_size, ne_dim_num))})
+                else:
+                    new_dim = list(input_ds[key].dims)
+                    new_dim.pop(ne_dim_num)
+                    new_dim = tuple(new_dim)
+                    new_input_ds = new_input_ds.assign({key: (new_dim, unpack_ne_dim_input(input_ds[key].data, ne_dim_num))})
             input_ds.close()
             input_ds = new_input_ds
 
@@ -219,6 +272,15 @@ if __name__ == "__main__":
             print("Nan section removed: " + str(count_before_nan_removal - input_ds[input_keys[0]].to_numpy().shape[0]))
         
         sample_count = sample_count + input_ds[input_keys[0]].to_numpy().shape[0]
+
+        if apply_gaus:
+            expander = GaussianLabelExpander()
+            mesh_data = output_ds[label_class_name_str].to_numpy()
+            if data_is_3D:
+                mesh_data = expander.gaussian_expand(mesh_data, [1,2,3])
+            else:
+                mesh_data = expander.gaussian_expand(mesh_data, [1,2])
+            output_ds[label_class_name_str] = (output_ds[label_class_name_str].dims, mesh_data)
                 
         if save_as_netcdf:
             input_ds_name = "examples/" + file_name_num + ".nc"

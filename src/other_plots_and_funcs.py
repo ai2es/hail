@@ -5,16 +5,19 @@ import numpy as np
 
 ###################
 ALL_LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch/patches/train/labels/*"
-OUTPUT_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch/images/test_dataset_plots/hist_train.png"
+OUTPUT_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/images/test_dataset_plots/hist_comp_dz_test.png"
 DATA_HAD_NE_DIM = False
 ###################
 TRAIN_LABELS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train/labels/*"
 ###################
-PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/labels/*"
+PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/test/unprocessed/examples/*"
+VAR_NAME = "comp_dz" # was "srh_0to3"
 ###################
+OUTFILE = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/test/predictions/y_hats_flattened.nc"
+######################
 
 
-def make_hist_plots():
+def make_hist_plots_labels():
     all_label_files = glob.glob(ALL_LABELS_GLOB)
     all_label_files.sort()
 
@@ -35,6 +38,22 @@ def make_hist_plots():
     plt.hist(gridrad_mesh, [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100])
     plt.ylim((0,1000000))
     plt.axvline(25.4, color='k', linewidth=3) # 1 inch threshold
+    plt.tight_layout()
+    plt.savefig(OUTPUT_PATH, bbox_inches='tight')
+
+
+def make_hist_plots_examples():
+    all_files = glob.glob(PATH_GLOB)
+    all_files.sort()
+
+    ds = xr.open_mfdataset(all_files, concat_dim='n_samples', combine='nested', engine='netcdf4')
+    data = ds[VAR_NAME].to_numpy().flatten()
+
+    fig = plt.figure(figsize=(16, 12), dpi=300)
+    fig.patch.set_facecolor('white')
+    # Did have np.arange(-2000,5000,100) for srh
+    plt.hist(data, [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90], log=True, edgecolor = "black")
+    plt.ylim((0,10**10)) # Was 10**9 for srh
     plt.tight_layout()
     plt.savefig(OUTPUT_PATH, bbox_inches='tight')
 
@@ -84,4 +103,12 @@ def check_num_of_storm_days(path_glob):
     print(num_of_storm_days)
 
 
-check_num_of_storm_days(PATH_GLOB)
+def combine_netcdfs_together(path_glob, outfile):
+    file_list = glob.glob(path_glob)
+    file_list.sort()
+    ds = xr.open_mfdataset(file_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
+
+    ds.to_netcdf(outfile)
+
+
+make_hist_plots_examples()

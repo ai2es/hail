@@ -5,11 +5,11 @@ import xarray as xr
 import glob
 
 
-EXAMPLES_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainval/examples/*"
-LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainval/labels/*"
+EXAMPLES_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/unprocessed_refl/examples/*"
+LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/unprocessed_refl/labels/*"
 JSON_PATH = "/home/tgschmidt/hail/configs/slicing.json"
-MODELS_ROOT_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/multi_models"
-NUM_OUTPUT_FILES = 60
+MODELS_ROOT_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/multi_models"
+NUM_OUTPUT_FILES = 10
 
 
 def slice_by_indices(ds, slice_and_name_dict_list, root_output_path, num_output_files):

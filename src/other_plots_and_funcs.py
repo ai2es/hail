@@ -10,10 +10,10 @@ DATA_HAD_NE_DIM = False
 ###################
 TRAIN_LABELS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train/labels/*"
 ###################
-PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/test/unprocessed/examples/*"
+PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/single_model/predictions_ensemble/*"
 VAR_NAME = "comp_dz" # was "srh_0to3"
 ###################
-OUTFILE = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/test/predictions/y_hats_flattened.nc"
+OUTFILE = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/single_model/single_preds/y_hats_ens.nc"
 ######################
 
 
@@ -106,9 +106,9 @@ def check_num_of_storm_days(path_glob):
 def combine_netcdfs_together(path_glob, outfile):
     file_list = glob.glob(path_glob)
     file_list.sort()
-    ds = xr.open_mfdataset(file_list, concat_dim='n_samples', combine='nested', engine='netcdf4')
+    ds = xr.open_mfdataset(file_list, concat_dim='time_dim', combine='nested', engine='netcdf4')
 
     ds.to_netcdf(outfile)
 
 
-make_hist_plots_examples()
+combine_netcdfs_together(PATH_GLOB, OUTFILE)

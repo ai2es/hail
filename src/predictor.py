@@ -22,6 +22,7 @@ def create_parser():
     parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190501/processed/labels/*')
     parser.add_argument('--selected_time', type=int, default=None)
     parser.add_argument('--n_parallel_runs', type=int, default=None)
+    parser.add_argument('--ens_member', type=int, default=None)
     parser.add_argument('--use_hailcast', '-u', action='store_true')
     parser.add_argument('--multi_model', '-m', action='store_true')
     parser.add_argument('--run_num', type=int, default=0)
@@ -47,12 +48,11 @@ if __name__ == "__main__":
     run_num = args["run_num"]
     multi_model = args["multi_model"]
     n_parallel_runs = args["n_parallel_runs"]
+    ens_member = args["ens_member"]
 
     TIMES_IN_MINS = ["00","05","10","15","20","25","30","35","40","45","50","55"]
-    CHOSEN_MODELS = ["saved_models_00/checkpoints/125","saved_models_15/checkpoints/334","saved_models_30/checkpoints/319","saved_models_45/checkpoints/138","saved_models_55/checkpoints/256"]
-    MODEL_INDICES = [0,0,0,1,1,1,2,2,2,3,3,4]
-    # CHOSEN_MODELS = ["saved_models_00/checkpoints/125"]
-    # MODEL_INDICES = [0,0,0,0,0,0,0,0,0,0,0,0]
+    CHOSEN_MODELS = ["23"]
+    MODEL_INDICES = [0,0,0,0,0,0,0,0,0,0,0,0]
 
     if multi_model:
         selected_time = run_num
@@ -87,24 +87,40 @@ if __name__ == "__main__":
     model = keras.models.load_model(checkpoint_path, compile=False)#, custom_objects={"max_csi": MaxCriticalSuccessIndex()})
 
     if "ne" in examples_ds.dims:
-        full_ensemble = []
-        for i in range(examples_ds.dims["ne"]):
-            member_example_ds = examples_ds[{"ne": i}]
+        if ens_member is not None:
+            examples_ds = examples_ds[{"ne": ens_member}]
 
-            if "hailcast" in member_example_ds.keys() and not use_hailcast:
-                member_example_ds = member_example_ds.drop("hailcast")
-
-            input_array = member_example_ds.to_array()
-            member_example_ds.close()
-            member_example_ds = None
+            if "hailcast" in examples_ds.keys() and not use_hailcast:
+                examples_ds = examples_ds.drop("hailcast")
+            
+            input_array = examples_ds.to_array()
+            examples_ds.close()
+            examples_ds = None
             input_array = input_array.transpose(..., "variable").to_numpy()
 
             #evaluate the unet on the testing data
-            full_ensemble.append(model.predict(input_array))
+            y_hat = model.predict(input_array)
+            input_array = None
+        
+        else:
+            full_ensemble = []
+            for i in range(examples_ds.dims["ne"]):
+                member_example_ds = examples_ds[{"ne": i}]
 
-        full_ensemble = np.stack(full_ensemble)
-        y_hat = np.mean(full_ensemble, axis=0)
-        full_ensemble = None
+                if "hailcast" in member_example_ds.keys() and not use_hailcast:
+                    member_example_ds = member_example_ds.drop("hailcast")
+
+                input_array = member_example_ds.to_array()
+                member_example_ds.close()
+                member_example_ds = None
+                input_array = input_array.transpose(..., "variable").to_numpy()
+
+                #evaluate the unet on the testing data
+                full_ensemble.append(model.predict(input_array))
+
+            full_ensemble = np.stack(full_ensemble)
+            y_hat = np.mean(full_ensemble, axis=0)
+            full_ensemble = None
     else:
         if "hailcast" in examples_ds.keys() and not use_hailcast:
             examples_ds = examples_ds.drop("hailcast")

@@ -15,7 +15,7 @@ import argparse
 # NUM_OUTPUT_FILES = (60,20)
 # N_FOLDS = 5
 # FOLD_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds"
-MESH_NAME = "MESH_class_bin" # Was MESH_class_bin_0
+MESH_NAME = "MESH_class_bin_severe_0" # was MESH_class_bin and MESH_class_bin_0
 
 
 def cluster_by_storm_event(labels):

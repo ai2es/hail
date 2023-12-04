@@ -61,11 +61,28 @@ def create_parser():
     parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/examples/*')
     parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/labels*')
     parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/tf_datasets')
-    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/mins_maxs')
-    parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', 'time', "time_0", "time_1", "time_2", "time_3", "time_4", "time_5", "time_6", "time_7", "time_8", "time_9", "time_10", "time_11", "time_12"]) # Use to have hailcast
-    parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH95', 'MESH95_0', "time_0", "time_1", "time_2", "time_3", "time_4", "time_5", "time_6", "time_7", "time_8", "time_9", "time_10", "time_11", "time_12"])
-    parser.add_argument('--input_vars_that_must_repeat', type=str, nargs='+', default=['strikes'])
-    parser.add_argument('--label_class_name_str', type=str, default='MESH_class_bin') # Was MESH_class_bin_0
+    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/mins_maxs_gridrad_refl') # was mins_maxs_gridrad_refl
+                                                                                # REMOVE 'strikes' BELOW FOR LIGHTNING CASE
+    parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', "ZH", "ZH_class_bin", "comp_dz_class_bin",
+                                                                                'time', "time_0", "time_1", "time_2",
+                                                                                "time_3", "time_4", "time_5", "time_6", 
+                                                                                "time_7", "time_8", "time_9", "time_10", 
+                                                                                "time_11", "time_12", "ZH_0", "ZH_1", "ZH_2",
+                                                                                "ZH_3", "ZH_4", "ZH_5", "ZH_6", "ZH_7", "ZH_8",
+                                                                                "ZH_9", "ZH_10", "ZH_11", "ZH_12", "ZH_class_bin_0",
+                                                                                "ZH_class_bin_1", "ZH_class_bin_2", "ZH_class_bin_3",
+                                                                                "ZH_class_bin_4", "ZH_class_bin_5", "ZH_class_bin_6",
+                                                                                "ZH_class_bin_7", "ZH_class_bin_8", "ZH_class_bin_9",
+                                                                                "ZH_class_bin_10", "ZH_class_bin_11", "ZH_class_bin_12"])
+    
+                                                                               # BELOW USED TO HAVE MESH_class_bin_severe and MESH_class_bin_severe_0
+    parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH_class_bin',
+                                                                              'MESH95', 'MESH95_0', "time_0", "time_1", 
+                                                                              "time_2", "time_3", "time_4", "time_5", 
+                                                                              "time_6", "time_7", "time_8", "time_9", 
+                                                                              "time_10", "time_11", "time_12", "MESH_class_bin_0"])
+    parser.add_argument('--input_vars_that_must_repeat', type=str, nargs='+', default=['strikes', 'strikes_0', 'strikes_1', 'strikes_2', 'strikes_3'])
+    parser.add_argument('--label_class_name_str', type=str, default='MESH_class_bin_severe') # Was MESH_class_bin_0
     parser.add_argument('--approx_file_clumping_num', type=int, default=None) # Was 3
     parser.add_argument('--n_parallel_runs', type=int, default=None) # Was 15
     parser.add_argument('--run_num', type=int, default=0)
@@ -246,10 +263,20 @@ if __name__ == "__main__":
             input_ds = new_input_ds
 
         if min_max_normalize:
+            min_max_keys = list(example_maxs.keys())
+
             for key in input_keys:
                 if key == "hailcast" and not normalize_hailcast:
                     continue
-                input_ds[key] = (input_ds[key].dims, min_max_norm(input_ds[key].data, example_mins[key].data, example_maxs[key].data))
+                    
+                selected_key = "___"
+
+                for new_key in min_max_keys:
+                    if new_key in key:
+                        selected_key = new_key
+                        break
+                
+                input_ds[key] = (input_ds[key].dims, min_max_norm(input_ds[key].data, example_mins[selected_key].data, example_maxs[selected_key].data))
 
         if remove_patches_with_nans:
             count_before_nan_removal = input_ds[input_keys[0]].to_numpy().shape[0]

@@ -42,6 +42,34 @@ class EarlyStoppingLoss(Callback):
             if current_loss > self.value:
                 self.model.stop_training = True
 
+
+def neighborhood_max_csi(truth_4d, pred_4d, neighborhood_pixel_diameter=5):
+    pool1 = tf.keras.layers.MaxPooling2D(pool_size=(neighborhood_pixel_diameter, neighborhood_pixel_diameter), strides=(1,1), padding='same')
+    truth_4d_expanded = pool1(truth_4d)
+    truth_4d_expanded = np.asarray(truth_4d_expanded, dtype = float)
+
+    pred_4d = pred_4d.flatten()
+    truth_4d = truth_4d.flatten()
+    truth_4d_expanded = truth_4d_expanded.flatten()
+
+    thresholds=np.arange(0.05,1.05,0.05)
+    all_csis = []
+
+    for threshold in thresholds:
+        pred_bin = np.zeros(pred_4d.shape)
+        pred_bin[np.nonzero(pred_4d >= threshold)] = 1
+
+        # calc tp, fp, fn, tn
+        tp  = len(np.where(np.logical_and(pred_bin == 1, truth_4d_expanded == 1))[0])
+        fp = len(np.where(np.logical_and(pred_bin == 1, truth_4d_expanded == 0))[0])
+        fn = len(np.where(np.logical_and(pred_bin == 0, truth_4d == 1))[0])
+        tn  = len(np.where(np.logical_and(pred_bin == 0, truth_4d == 0))[0])
+
+        all_csis.append(tp/(tp + fn + fp))
+
+    return np.max(all_csis)
+
+
 class MaxCriticalSuccessIndex(tf.keras.metrics.Metric):
     """ 
     Calcualte the element-wise [e.g., pixel-wise],

@@ -35,8 +35,8 @@ else:
 	# No allocated GPUs: do not delete this case!                                                                	 
     tf.config.set_visible_devices([], 'GPU')
 
-tf.config.threading.set_intra_op_parallelism_threads(32)
-tf.config.threading.set_inter_op_parallelism_threads(32)
+tf.config.threading.set_intra_op_parallelism_threads(16)
+tf.config.threading.set_inter_op_parallelism_threads(16)
 
 
 import random
@@ -68,7 +68,7 @@ flags.DEFINE_integer(
 )
 flags.DEFINE_string(
     "logdir",
-    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_nogaus/fold_0000/tensorboard_logdir",
+    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_refl_nolightning/fold_0000/tensorboard_logdir",
     "The directory to write the summary information to.",
 )
 flags.DEFINE_integer(
@@ -84,23 +84,31 @@ flags.DEFINE_integer(
 )
 
 # my params
-TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/cv_folds/fold_0000/train/tf_datasets/*"
-TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/cv_folds/fold_0000/val/tf_datasets/*"
-H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_nogaus/fold_0000/h5_models"
-CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_nogaus/fold_0000/checkpoints"
-# Was 71370 for fold 0004 72144 for fold 0003 72036 for fold 0002 72414 for fold 0001 and 71316 for fold 0000
-NUM_SAMPLES_IN_MEM = 60624 
+TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/cv_folds_gridrad_refl/fold_0000/train/tf_datasets_no_lightning/*"
+TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/cv_folds_gridrad_refl/fold_0000/val/tf_datasets_no_lightning/*"
+H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_refl_nolightning/fold_0000/h5_models"
+CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_refl_nolightning/fold_0000/checkpoints"
+# OLD TESTS: Was 71370 for fold 0004 72144 for fold 0003 72036 for fold 0002 72414 for fold 0001 and 71316 for fold 0000
+# WITH ALL OPTIONS MODELS: Was 60732 for fold 0004 60660 for fold 0003 60678 for fold 0002 60714 for fold 0001 60624 for fold 0000
+# For small hail: 60210
+# For 2D model 0: 60318 for model 1: 60210 for model 2: 60210 for model 3: 59958 for model 4: 60210 for model 5: 60228 for model 6: 60336
+# For model 7: 60174 for model 8: 60192
+NUM_SAMPLES_IN_MEM = 60210
 MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = True
-INPUT_SHAPE = (64,64,12,19) # Was (128,128,12,13) and then (128,128,12,18) and (64,64,12,18)
+# Was (64,64,12,19) for 3D case with lightning
+# For model 0: (64,64,76) for model 1: (64,64,94) for model 2: (64,64,112) for model 3: (64,64,130) for model 4: (64,64,148) for model 5: (64,64,166)
+# For model 6: (64,64,184 for model 7: (64,64,202) for model 8: (64,64,220)
+INPUT_SHAPE = (64,64,12,18) #19 for lightning
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 1
-PATIENCE = 4 # Was 3 for multi-2d-case!
+# Was 4 for 3D case and 3 for 2D case
+PATIENCE = 4
 IS_3D_DATA = True
-USE_MULTIPLE_GPUS = True
+USE_MULTIPLE_GPUS = False
 RANDOM_SEED = 3489 # Was 5690
-RUN_START_INDEX = 0
-RUN_SINGLE_MODEL = False
+RUN_START_INDEX = [46]
+RUN_SINGLE_MODEL = True
 
 #convolution params
 HP_CONV_LAYERS = hp.HParam("conv_layers", hp.IntInterval(1, 3))
@@ -421,6 +429,13 @@ def run_all(logdir, verbose=False):
     with tf.summary.create_file_writer(logdir).as_default():
         hp.hparams_config(hparams=HPARAMS, metrics=METRICS_SUMMARY)
 
+    if RUN_SINGLE_MODEL:
+        if type(RUN_START_INDEX) is not list:
+            raise Exception("If RUN_SINGLE_MODEL is on, you must supply a list for RUN_START_INDEX")
+    else:
+        if type(RUN_START_INDEX) is not int:
+            raise Exception("If RUN_SINGLE_MODEL is off, you must supply an int for RUN_START_INDEX")
+
     sessions_per_group = 1
     num_sessions = flags.FLAGS.num_session_groups * sessions_per_group
     session_index = 0  # across all session groups
@@ -432,7 +447,7 @@ def run_all(logdir, verbose=False):
             continue
         for repeat_index in range(sessions_per_group):
             session_id = str(session_index)
-            if (not RUN_SINGLE_MODEL and session_index >= RUN_START_INDEX) or (RUN_SINGLE_MODEL and session_index == RUN_START_INDEX):
+            if (not RUN_SINGLE_MODEL and session_index >= RUN_START_INDEX) or (RUN_SINGLE_MODEL and session_index in RUN_START_INDEX):
                 if verbose:
                     print(
                         "--- Running training session %d/%d"

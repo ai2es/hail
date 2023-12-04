@@ -4,6 +4,20 @@
             "examples": [
                 {
                     "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time", "ZH", "ZH_class_bin"],
+                    "slices": [0]
+                }
+            ],
+            "labels": [
+                {
+                    "data_var_names": ["MESH95", "MESH_class_bin", "MESH_class_bin_severe"],
+                    "slices": [0]
+                }
+            ]
+        },
+        {
+            "examples": [
+                {
+                    "data_var_names": ["uh_2to5", "w_up", "freezing_level", "hail", "hailcast", "comp_dz", "td_2", "cape_mu", "cin_mu", "shear_v_0to6", "shear_u_0to6", "srh_0to1", "srh_0to3", "scp", "cape_sfc", "cin_sfc", "lfc_mu", "lcl_mu", "time", "ZH", "ZH_class_bin"],
                     "slices": [0,1,2,3]
                 },
                 {

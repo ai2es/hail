@@ -9,7 +9,7 @@ import random
 
 
 EXAMPLES_VAR_NAME = "uh_2to5"
-LABELS_VAR_NAME = "MESH_class_bin"
+LABELS_VAR_NAME = "MESH_class_bin_severe"
 
 
 def create_parser():
@@ -33,7 +33,7 @@ def create_parser():
     return parser
 
 
-# NOTE: Assumes data does not have "ne" dim right now. 2D data should be fine.
+# NOTE: Assumes data does not have "ne" dim right now. 3D data should be fine.
 def train(examples, labels, val_examples, val_labels, saved_model_path, n_cpus):
     # Hyperparams
     solvers = ["sag", "saga"] #["lbfgs", "liblinear", "newton-cg", "newton-cholesky", "sag", "saga"]
@@ -120,11 +120,26 @@ def predict(examples, saved_model_path, predictions_outfile):
 
     data_for_all_timesteps = []
     for i in range(examples_ds.dims["time_dim"]):
-        example_ds_one_time = examples_ds[{"time_dim": i}]
-        example_ds_one_time = example_ds_one_time[EXAMPLES_VAR_NAME].to_numpy().flatten()
-        example_ds_one_time = np.expand_dims(example_ds_one_time, axis=-1)
+        if "ne" in examples_ds.dims:
+            data_for_all_ensemble_members = []
 
-        data_for_all_timesteps.append(model.predict(example_ds_one_time))
+            for j in range(examples_ds.dims["ne"]):
+                example_ds_one_time = examples_ds[{"time_dim": i}]
+                example_ds_one_time = example_ds_one_time[{"ne": j}]
+                example_ds_one_time = example_ds_one_time[EXAMPLES_VAR_NAME].to_numpy().flatten()
+                example_ds_one_time = np.expand_dims(example_ds_one_time, axis=-1)
+
+                data_for_all_ensemble_members.append(model.predict(example_ds_one_time))
+
+            all_ensemble_data_stacked = np.stack(data_for_all_ensemble_members, axis=-1)
+            data_for_all_timesteps.append(np.mean(all_ensemble_data_stacked, axis=-1))
+        else:
+            example_ds_one_time = examples_ds[{"time_dim": i}]
+            
+            example_ds_one_time = example_ds_one_time[EXAMPLES_VAR_NAME].to_numpy().flatten()
+            example_ds_one_time = np.expand_dims(example_ds_one_time, axis=-1)
+
+            data_for_all_timesteps.append(model.predict(example_ds_one_time))
 
     output_np = np.stack(data_for_all_timesteps, axis=-1)
     new_ds_dict = {LABELS_VAR_NAME:(("n_samples", "time_dim"), output_np)}

@@ -99,32 +99,31 @@ class MaxCriticalSuccessIndex(tf.keras.metrics.Metric):
                  scope = None,
                  **kwargs):
 
-        if scope is not None:
-            with scope.scope():
-                tp = tf.keras.metrics.TruePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
-                fp = tf.keras.metrics.FalsePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
-                fn = tf.keras.metrics.FalseNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist())
-        else:
-            tp = tf.keras.metrics.TruePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
-            fp = tf.keras.metrics.FalsePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
-            fn = tf.keras.metrics.FalseNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+        tp = tf.keras.metrics.TruePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+        fp = tf.keras.metrics.FalsePositives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+        fn = tf.keras.metrics.FalseNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist())
+        tn = tf.keras.metrics.TrueNegatives(thresholds=np.arange(0.05,1.05,0.05).tolist())
 
         super(MaxCriticalSuccessIndex, self).__init__(name=name, **kwargs)
 
         #initialize csi value, if no data given, it will be 0 
-        self.csi = self.add_weight(name="csi", initializer="zeros")
+        self.tp = self.add_weight(name="tp", initializer="zeros")
+        self.fp = self.add_weight(name="fp", initializer="zeros")
+        self.fn = self.add_weight(name="fn", initializer="zeros")
 
         #store defined metric functions
-        self.tp = tp 
-        self.fp = fp 
-        self.fn = fn
+        self.tp_metric = tp
+        self.tn_metric = tn 
+        self.fp_metric = fp 
+        self.fn_metric = fn
         #flush functions just in case 
-        self.tp.reset_state()
-        self.fp.reset_state()
-        self.fn.reset_state()
+        self.tp_metric.reset_state()
+        self.fp_metric.reset_state()
+        self.fn_metric.reset_state()
 
         self.is_3D = is_3D
         self.time_index = time_index
+
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         if len(y_true.shape) > 1:
@@ -143,25 +142,31 @@ class MaxCriticalSuccessIndex(tf.keras.metrics.Metric):
         #if the output is a map (batch,nx,ny,nl) ravel it
 
         #call vectorized stats metrics, add them to running amount of each
-        self.tp.update_state(y_true,y_pred)
-        self.fp.update_state(y_true,y_pred)
-        self.fn.update_state(y_true,y_pred)
+        self.tp_metric.update_state(y_true,y_pred)
+        self.fp_metric.update_state(y_true,y_pred)
+        self.fn_metric.update_state(y_true,y_pred)
+        self.tn_metric.update_state(y_true,y_pred)
 
         #calc current max csi (so we can get updates per batch)
-        self.csi_val = tf.reduce_max(self.tp.result()/(self.tp.result() + self.fn.result() + self.fp.result()))
+        csi_idx = tf.argmax(self.tp_metric.result()/(self.tp_metric.result() + self.fn_metric.result() + self.fp_metric.result()))
 
         #assign the value to the csi 'weight'
-        self.csi.assign(self.csi_val)
+        self.tp.assign(self.tp_metric.result()[csi_idx])
+        self.fp.assign(self.fp_metric.result()[csi_idx])
+        self.fn.assign(self.fn_metric.result()[csi_idx])
       
     def result(self):
-        return self.csi
+        return self.tp/(self.tp + self.fn + self.fp)
 
     def reset_state(self):
         # Reset the counts 
-        self.csi.assign(0.0)
-        self.tp.reset_state()
-        self.fp.reset_state()
-        self.fn.reset_state()
+        self.tp.assign(0.0)
+        self.fp.assign(0.0)
+        self.fn.assign(0.0)
+
+        self.tp_metric.reset_state()
+        self.fp_metric.reset_state()
+        self.fn_metric.reset_state()
 
 
 def fractions_skill_score_loss(mask_size, c=1.0, cutoff=0.5, want_hard_discretization=False):

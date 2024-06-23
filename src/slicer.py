@@ -35,9 +35,6 @@ def slice_by_indices(ds, slice_and_name_dict_list, root_output_path, num_output_
                 data_var_time_name = data_var_name + "_" + str(i)
                 new_ds = new_ds.assign({data_var_time_name: ds_one_timestep[data_var_name]})
 
-    # To make any remaining time coords only the init time
-    # new_ds = new_ds[{"time_dim": 0}]
-
     divided_indices_for_output = np.array_split(np.arange(new_ds.dims["n_samples"]), num_output_files)
     for i, output_indices in enumerate(divided_indices_for_output):
         file_name_num = "{:04d}".format(i)

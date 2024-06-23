@@ -2,10 +2,8 @@ import xarray as xr
 import glob
 from tensorflow import keras
 import argparse
-import json
 import os
 import numpy as np
-# from custom_metrics import MaxCriticalSuccessIndex
 
 
 def create_parser():
@@ -17,7 +15,6 @@ def create_parser():
 
     parser.add_argument('--single_checkpoint', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/saved_models/checkpoints/123')
     parser.add_argument('--predictions_outfile', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190501/predictions/y_hats.nc')
-    # parser.add_argument('--args_json', type=str, default='/home/tgschmidt/hail/configs/predict.json')
     parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190501/processed/examples/*')
     parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190501/processed/labels/*')
     parser.add_argument('--selected_time', type=int, default=None)
@@ -34,10 +31,7 @@ if __name__ == "__main__":
     # Perform all the argument parsing
     parser = create_parser()
     args = parser.parse_args()
-    # with open(args.args_json) as json_file:
-    #     json_dict = json.load(json_file)
     args = vars(args)
-    # args.update(json_dict)
 
     label_patches_dir = args["labels"]
     example_patches_dir = args["examples"]
@@ -84,7 +78,7 @@ if __name__ == "__main__":
         labels_ds = labels_ds.transpose("n_samples", "lat_dim", "lon_dim", ...)
     
     #read in the unet
-    model = keras.models.load_model(checkpoint_path, compile=False)#, custom_objects={"max_csi": MaxCriticalSuccessIndex()})
+    model = keras.models.load_model(checkpoint_path, compile=False)
 
     if "ne" in examples_ds.dims:
         if ens_member is not None:

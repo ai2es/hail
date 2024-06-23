@@ -1,23 +1,3 @@
-# Copyright 2019 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Write sample summary data for the hparams plugin.
-See also `hparams_minimal_demo.py` in this directory for a demo that
-runs much faster, using synthetic data instead of actually training
-MNIST models.
-"""
-
 import tensorflow as tf
 import os
 
@@ -55,10 +35,7 @@ import glob
 import warnings
 
 if int(tf.__version__.split(".")[0]) < 2:
-    # The tag names emitted for Keras metrics changed from "acc" (in 1.x)
-    # to "accuracy" (in 2.x), so this demo does not work properly in
-    # TensorFlow 1.x (even with `tf.enable_eager_execution()`).
-    raise ImportError("TensorFlow 2.x is required to run this demo.")
+    raise ImportError("TensorFlow 2.x is required")
 
 
 flags.DEFINE_integer(
@@ -88,25 +65,16 @@ TF_TRAIN_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d
 TF_VAL_DS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/cv_folds_gridrad_refl/fold_0000/val/tf_datasets_no_lightning/*"
 H5_MODELS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_refl_nolightning/fold_0000/h5_models"
 CHECKPOINTS_DIR = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/saved_models_refl_nolightning/fold_0000/checkpoints"
-# OLD TESTS: Was 71370 for fold 0004 72144 for fold 0003 72036 for fold 0002 72414 for fold 0001 and 71316 for fold 0000
-# WITH ALL OPTIONS MODELS: Was 60732 for fold 0004 60660 for fold 0003 60678 for fold 0002 60714 for fold 0001 60624 for fold 0000
-# For small hail: 60210
-# For 2D model 0: 60318 for model 1: 60210 for model 2: 60210 for model 3: 59958 for model 4: 60210 for model 5: 60228 for model 6: 60336
-# For model 7: 60174 for model 8: 60192
 NUM_SAMPLES_IN_MEM = 60210
 MEM_SAMPLES_NUM_IS_COMPLETE_DS_SIZE = True
-# Was (64,64,12,19) for 3D case with lightning
-# For model 0: (64,64,76) for model 1: (64,64,94) for model 2: (64,64,112) for model 3: (64,64,130) for model 4: (64,64,148) for model 5: (64,64,166)
-# For model 6: (64,64,184 for model 7: (64,64,202) for model 8: (64,64,220)
-INPUT_SHAPE = (64,64,12,18) #19 for lightning
+INPUT_SHAPE = (64,64,12,19) #19 for lightning
 OUTPUT_CLASSES = 1
 OUTPUT_ACTIVATION = "Sigmoid"
 VALIDATION_FREQ = 1
-# Was 4 for 3D case and 3 for 2D case
 PATIENCE = 4
 IS_3D_DATA = True
 USE_MULTIPLE_GPUS = False
-RANDOM_SEED = 3489 # Was 5690
+RANDOM_SEED = 3489
 RUN_START_INDEX = [46]
 RUN_SINGLE_MODEL = True
 
@@ -116,7 +84,6 @@ HP_CONV_KERNEL_SIZE = hp.HParam("conv_kernel_size", hp.Discrete([3, 5, 7]))
 HP_CONV_ACTIVATION = hp.HParam("conv_activation", hp.Discrete(['ReLU', 'ELU']))
 HP_CONV_KERNELS = hp.HParam('num_of_kernels', hp.Discrete([4,8,16,32]))
 HP_LOSS_WEIGHT = hp.HParam('loss_weights', hp.Discrete([2.0,3.0,4.0,5.0,7.0]))
-# HP_FSS_RADII = hp.HParam('FSS_radii', hp.Discrete([2,3,4]))
 
 #unet param
 HP_UNET_DEPTH = hp.HParam('depth_of_unet', hp.Discrete([1,2,3])) # Was [1,2,3,4,5] for or multi-2d-case!
@@ -124,8 +91,8 @@ HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam", "adagrad", "sgd", "rm
 HP_LOSS = hp.HParam("loss", hp.Discrete(["binary_crossentropy", "weighted_binary_crossentropy"]))
 HP_BATCHNORM = hp.HParam('batchnorm', hp.Discrete([False, True]))
 HP_3PLUS = hp.HParam('3plus', hp.Discrete([False, True]))
-HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256])) # Also had 512
-HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([128])) # Was 512
+HP_BATCHSIZE = hp.HParam('batch_size', hp.Discrete([32,64,128,256]))
+HP_VAL_BATCHSIZE = hp.HParam('val_batch_size', hp.Discrete([128]))
 HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([1e-2,1e-3]))
 HP_L2_REG = hp.HParam('l2_reg', hp.Discrete([0.1, 0.05, 0.01, 0.005, 0.001, 0.0001, 0.00001]))
 HP_L1_REG = hp.HParam('l1_reg', hp.Discrete([0.1, 0.05, 0.01, 0.005, 0.001, 0.0001, 0.00001]))
@@ -143,7 +110,6 @@ HPARAMS = [HP_CONV_LAYERS,
     HP_VAL_BATCHSIZE,
     HP_LEARNING_RATE,
     HP_LOSS_WEIGHT,
-    # HP_FSS_RADII,
     HP_L2_REG,
     HP_L1_REG
 ]
@@ -187,7 +153,6 @@ def build_loss_dict(weight):# , FSS_radius):
     loss_dict = {}
     loss_dict['binary_crossentropy'] = tf.keras.losses.BinaryCrossentropy(from_logits=False)
     loss_dict['weighted_binary_crossentropy'] = WeightedBinaryCrossEntropy(weights=[weight,1.0])
-    # loss_dict['FSS'] = fractions_skill_score_loss(FSS_radius)
     return loss_dict
 
 def build_metric_dict():
@@ -227,7 +192,6 @@ def model_fn(hparams, seed):
 
     if USE_MULTIPLE_GPUS:
         with mirrored_strategy.scope():
-            # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
             if IS_3D_DATA:
                 if hparams[HP_3PLUS]:
                     model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
@@ -252,7 +216,7 @@ def model_fn(hparams, seed):
                                     batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
             #compile losses: 
-            loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])# , hparams[HP_FSS_RADII])
+            loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])
             opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
             metric_dict = build_metric_dict()
             model.compile(
@@ -261,7 +225,6 @@ def model_fn(hparams, seed):
                 metrics=list(itemgetter(*METRICS)(metric_dict)),
             )
     else:
-        # TODO: MAKE SURE TO MAKE COLLAPSE A SETTING THAT CAN BE CHANGED AT TOP
         if IS_3D_DATA:
             if hparams[HP_3PLUS]:
                 model = models.unet_3plus_3d(INPUT_SHAPE, kernel_list, n_labels=OUTPUT_CLASSES,kernel_size=hparams[HP_CONV_KERNEL_SIZE],
@@ -286,7 +249,7 @@ def model_fn(hparams, seed):
                                 batch_norm=hparams[HP_BATCHNORM], l2=hparams[HP_L2_REG], l1=hparams[HP_L1_REG], pool='max', unpool='nearest', name='unet')
 
         #compile losses: 
-        loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])# , hparams[HP_FSS_RADII])
+        loss_dict = build_loss_dict(hparams[HP_LOSS_WEIGHT])
         opt_dict = build_opt_dict(hparams[HP_LEARNING_RATE])
         metric_dict = build_metric_dict()
         model.compile(
@@ -306,11 +269,6 @@ def prepare_data(tf_ds_train_dir_glob, tf_ds_val_dir_glob):
     tf_ds_files.sort()
     tf_val_ds_files = glob.glob(tf_ds_val_dir_glob)
     tf_val_ds_files.sort()
-
-    ######### TEMP #############
-    # tf_ds_files = tf_ds_files[:32]
-    # tf_val_ds_files = tf_val_ds_files[:32]
-    ######################################
 
     complete_tf_ds = tf.data.experimental.load(tf_ds_files.pop(0))
     for tf_ds_file in tf_ds_files:
@@ -340,9 +298,6 @@ def run(data, base_logdir, session_id, hparams):
     model,trainable_count = model_fn(hparams=hparams, seed=session_id)
     logdir = os.path.join(base_logdir, session_id)
 
-    # if trainable_count > 4000000: #TODO: Maybe make this number a setting too?
-    #     return
-
     ds_train, ds_val = data
 
     #batch the training data accordingly
@@ -364,16 +319,10 @@ def run(data, base_logdir, session_id, hparams):
 
     checkpoint_path = os.path.join(CHECKPOINTS_DIR, session_id)
     if IS_3D_DATA:
-        # checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
-        #                         monitor='val_max_csi_55', verbose=0, save_best_only=True, 
-        #                         save_weights_only=False, save_freq='epoch', mode="max")
         checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
                                 monitor='val_loss', verbose=0, save_best_only=True, 
                                 save_weights_only=False, save_freq='epoch', mode="min")
     else:
-        # checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
-        #                         monitor='val_max_csi', verbose=0, save_best_only=True, 
-        #                         save_weights_only=False, save_freq='epoch', mode="max")
         checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(checkpoint_path,
                                 monitor='val_loss', verbose=0, save_best_only=True, 
                                 save_weights_only=False, save_freq='epoch', mode="min")
@@ -405,10 +354,7 @@ def run(data, base_logdir, session_id, hparams):
         warnings.warn("Had to skip training a model because it raised an exception!")
         return
 
-    #save trained model, need to build path first 
-    # split_dir = logdir.split('log1')
-    # right = split_dir[0][:-1] + split_dir[1]
-    # left = H5_MODELS_DIR
+    # save trained model, need to build path first 
     model_save_path = os.path.join(H5_MODELS_DIR, session_id + "model.h5")
     model.save(model_save_path)
 
@@ -467,8 +413,6 @@ def run_all(logdir, verbose=False):
 def main(unused_argv):
     np.random.seed(RANDOM_SEED)
     logdir = flags.FLAGS.logdir
-    # print('removing old logs')
-    # shutil.rmtree(logdir, ignore_errors=True)
     print("Saving output to %s." % logdir)
     if IS_3D_DATA:
         METRICS.append("max_csi_0")

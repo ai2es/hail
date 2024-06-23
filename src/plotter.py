@@ -23,10 +23,10 @@ import warnings
 import matplotlib as mpl
 import shapely.geometry
 from descartes import PolygonPatch
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, maximum_filter
 
 
-##### BEGIN CODE BORROWED FROM MONTE #####
+##### BEGIN CODE BORROWED FROM FLORA #####
 
 
 def _vertex_arrays_to_list(vertex_x_coords, vertex_y_coords):
@@ -196,7 +196,7 @@ def make_confidence_intervals(lead_time_minutes, pred_data, label_data, line_col
 
     return polygon_patch
 
-##### END CODE BORROWED FROM MONTE #####
+##### END CODE BORROWED FROM FLORA #####
 
 
 def create_parser():
@@ -311,11 +311,6 @@ def plot_static_casestudies(all_lons, all_lats, all_comp_dz, all_pred_hail, all_
     plt.contourf(lons,lats,true_val, [0, 1], colors='red', transform=ccrs.PlateCarree(), zorder=10, alpha=1.0)
     plt.contourf(lons,lats,hailcast, [0, 1], colors='blue', transform=ccrs.PlateCarree(), zorder=11, alpha=1.0)
     plt.contourf(lons,lats,hailcast_and_true, [0, 1], colors='orange', transform=ccrs.PlateCarree(), zorder=12, alpha=1.0)
-    ######## OLD STUFF BEFORE BLACK LINES ##################
-    # # was np.arange(10,101,10)/100 and vmin/vmax 0.1/1
-    # plt.contourf(lons,lats,pred_val,np.arange(10,101,10)/100, cmap="Greens", transform=ccrs.PlateCarree(), vmin=0.1, vmax=1.0, zorder=12, alpha=0.8)
-    # plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(10,101,10)/100).set_label(label=pred_val_label,size=30) #Changed padding here since other colorbars removed
-    ####################################################
     plt.contour(lons,lats,pred_val,np.arange(0,101,10)/100, colors='k', transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=1.0, zorder=13)
     plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(0,101,10)/100).set_label(label=pred_val_label,size=30)
 
@@ -414,7 +409,6 @@ def plot_casestudy_plots(args):
     predictions_paths = args["predictions_paths"]
     unprocessed_labels_path = args["unprocessed_labels"]
     unprocessed_examples_path = args["unprocessed_examples"]
-    # hailcast_files = args["hailcast_files"]
     ens_member = args["ens_member"]
     make_hailcast_probabilistic = args["make_hailcast_probabilistic"]
     ens_size = args["ens_size"]
@@ -429,18 +423,6 @@ def plot_casestudy_plots(args):
     stitched_domain_file = args["stitched_domain_file"]
 
     init_datetime = datetime.strptime(init_datetime, "%Y-%m-%d:%H%M")
-
-    ######## TEMP #################
-    # predictions_paths = glob.glob("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190501/predictions/y_hats_*")
-    # predictions_paths.sort()
-    # predictions_paths = [predictions_paths]
-    # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190501/predictions/y_hats.nc"]
-
-    # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/animations/20190520/predictions/y_hats.nc"]
-    # predictions_paths = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/animations/20190520/predictions/y_hats.nc"]
-    # predictions_paths.sort()
-    # predictions_paths = [predictions_paths]
-    ##################################
 
     # NOTE: # This block had to keep decode=False for legacy reasons. So the latlons could be put directly into the numpy arrays without losing them.
     if type(predictions_paths) is list:
@@ -604,17 +586,12 @@ def domain_refl_plot(plot_output_dir, lons, lats, comp_dz, pred_val, init_dateti
     current_datetime = init_datetime + timedelta(minutes=plot_num*5) # *5 for 5 minutes
     init_time_offset_str = "{:02d}".format(plot_num*5)
     ml_time_offset_str = "{:02d}".format(plot_num*5 - 15)
-    # title = "Severe Hail Event on " + current_datetime.strftime("%Y-%m-%d:%H%M") + " UTC (Initialization Time + " + init_time_offset_str + " Minutes)"
-    title = init_time_offset_str + " Minutes Since WoFS Init (" + ml_time_offset_str + " Minutes Since ML Forecast Start)"
-    comp_dz_label = "WoFS Composite Reflectivity (dBZ > 5)"
-    pred_val_label = "ML Predicted Probability of Hail > 1 inch"
 
     # Setup figure
     fig = plt.figure(figsize=(16, 12), dpi=300)
     fig.patch.set_facecolor('white')
     plt.tight_layout()
     ax = plt.axes(projection=ccrs.PlateCarree())
-    # plt.title(title, fontsize=20)
 
     # Case study 1
     ax.set_xlim((-102.5, -98))
@@ -657,14 +634,10 @@ def domain_refl_plot(plot_output_dir, lons, lats, comp_dz, pred_val, init_dateti
 
     # Add actual plots
     plt.contourf(lons,lats,comp_dz,np.arange(5, 76, 1), vmin = 5, vmax = 75, cmap=my_cmap, transform=ccrs.PlateCarree(), zorder=10)
-    # plt.colorbar(fraction=0.043, pad=0.07, ticks = np.arange(5,76,5)).set_label(label=comp_dz_label,size=30)
-    # was np.arange(0,101,10)/100 and vmin 0/1
     pred_val[pred_val < 0.02] = np.nan
     plt.contour(lons,lats,pred_val,np.arange(0,61,6)/100, colors='k', transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=0.6, zorder=11)
-    # plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(0,101,10)/100).set_label(label=pred_val_label,size=30)
 
     if include_reports:
-        # loader = StormReportLoader("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/storm_reports/STORM_EVENTS_2017-2021.csv", "NOAA", init_datetime.strftime("%Y%m%d%H%M"), plot_num*5, 0)
         current_datetime = current_datetime-timedelta(minutes=10)
         loader = StormReportLoader("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/storm_reports/STORM_EVENTS_2017-2021.csv", "NOAA", current_datetime.strftime("%Y%m%d%H%M"), 20, 0)
 
@@ -673,7 +646,6 @@ def domain_refl_plot(plot_output_dir, lons, lats, comp_dz, pred_val, init_dateti
 
         plt.scatter(storm_reports_hail_lons, storm_reports_hail_lats, color='k', s=180, marker='o', edgecolors= "white", transform=ccrs.PlateCarree(), zorder=12, label="Severe Hail")
         plt.scatter(storm_reports_hail_sig_lons, storm_reports_hail_sig_lats, color='k', s=700, marker='*', edgecolors= "white", transform=ccrs.PlateCarree(), zorder=13, label="Sig Severe Hail")
-        # plt.legend(prop={'size': 25}, loc=4).set_zorder(99)
 
     plt.savefig(os.path.join(plot_output_dir, "refl_plot_" + "{:04d}".format(plot_num) + '.png'), bbox_inches='tight')
 
@@ -683,11 +655,49 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
     current_datetime = init_datetime + timedelta(minutes=plot_num*5) # *5 for 5 minutes
     init_time_offset_str = "{:02d}".format(plot_num*5)
     ml_time_offset_str = "{:02d}".format(plot_num*5 - 15)
-    # title = "Severe Hail Event on " + current_datetime.strftime("%Y-%m-%d:%H%M") + " UTC (Initialization Time + " + init_time_offset_str + " Minutes)"
-    title = init_time_offset_str + " Minutes Since WoFS Init (" + ml_time_offset_str + " Minutes Since ML Forecast Start)"
-    real_val_label = "GridRad Location of Hail > 1 inch"
-    pred_val_label = "ML Predicted Probability of Hail > 1 inch"
-    hailcast_label = "WoFS Hailcast Probability of Hail > 1 inch"
+
+    ###### printed CSI values ########
+    print("----------------")
+    print("Timestep: " + str(plot_num))
+
+    lon_min = -102.5
+    lon_max = -98
+    lat_min = 33.25
+    lat_max = 37
+
+    lon_min_index = np.abs(lons[0,:] - lon_min).argmin()
+    lon_max_index = np.abs(lons[0,:] - lon_max).argmin()
+    lat_min_index = np.abs(lats[:,0] - lat_min).argmin()
+    lat_max_index = np.abs(lats[:,0] - lat_max).argmin()
+
+    true_sliced = true_val[lat_min_index:lat_max_index+1, lon_min_index:lon_max_index+1]
+    pred_sliced = pred_val[lat_min_index:lat_max_index+1, lon_min_index:lon_max_index+1]
+    hailcast_sliced = hailcast[lat_min_index:lat_max_index+1, lon_min_index:lon_max_index+1]
+
+    true_sliced[np.isnan(true_sliced)] = 0
+    pred_sliced[np.isnan(pred_sliced)] = 0
+    hailcast_sliced[np.isnan(hailcast_sliced)] = 0
+
+    max_csi_metric = MaxCriticalSuccessIndex()
+    max_csi_metric.reset_state()
+    max_csi_metric.update_state(true_sliced.flatten(), hailcast_sliced.flatten())
+    print("Hailcast Max CSI: " + str(max_csi_metric.result().numpy()))
+
+    max_csi_metric = MaxCriticalSuccessIndex()
+    max_csi_metric.reset_state()
+    max_csi_metric.update_state(true_sliced.flatten(), pred_sliced.flatten())
+    print("U-Net Max CSI: " + str(max_csi_metric.result().numpy()))
+
+    true_sliced = np.expand_dims(true_sliced, -1)
+    pred_sliced = np.expand_dims(pred_sliced, -1)
+    hailcast_sliced = np.expand_dims(hailcast_sliced, -1)
+    true_sliced = np.expand_dims(true_sliced, 0)
+    pred_sliced = np.expand_dims(pred_sliced, 0)
+    hailcast_sliced = np.expand_dims(hailcast_sliced, 0)
+
+    print("Hailcast Neighborhood Max CSI: " + str(neighborhood_max_csi(true_sliced, hailcast_sliced)))
+    print("U-Net Neighborhood Max CSI: " + str(neighborhood_max_csi(true_sliced, pred_sliced)))
+    ##########################################
 
     if make_hailcast_probabilistic:
         hailcast[np.nonzero(hailcast < 0.0001)] = np.nan
@@ -703,7 +713,6 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
     fig.patch.set_facecolor('white')
     plt.tight_layout()
     ax = plt.axes(projection=ccrs.PlateCarree())
-    # plt.title(title, fontsize=20)
 
     # Case study 1
     ax.set_xlim((-102.5, -98))
@@ -756,18 +765,10 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
         hailcast_and_true[np.nonzero(hailcast_and_true == 0)] = np.nan
         plt.contourf(lons,lats,hailcast, [0, 1], colors='blue', transform=ccrs.PlateCarree(), zorder=11, alpha=1.0)
         plt.contourf(lons,lats,hailcast_and_true, [0, 1], colors='orange', transform=ccrs.PlateCarree(), zorder=12, alpha=1.0)
-    ############ OLD STUFF BEFORE ADDING BLACK CONTOURS ##################
-    # # was np.arange(10,101,10)/100 and vmin/vmax 0.1/1
-    # plt.contourf(lons,lats,pred_val,np.arange(10,101,10)/100, cmap="Greens", transform=ccrs.PlateCarree(), vmin=0.1, vmax=1.0, zorder=12, alpha=0.8)
-    # plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(10,101,10)/100).set_label(label=pred_val_label,size=30) #Changed padding here since other colorbars removed
-    ###############################################################
     pred_val[pred_val < 0.02] = np.nan
     plt.contour(lons,lats,pred_val,np.arange(0,61,6)/100, colors='k', transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=0.6, zorder=13)
-    # plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(0,61,6)/100).set_label(label=pred_val_label,size=30)
-
 
     if include_reports:
-        # loader = StormReportLoader("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/storm_reports/STORM_EVENTS_2017-2021.csv", "NOAA", init_datetime.strftime("%Y%m%d%H%M"), plot_num*5, 0)
         current_datetime = current_datetime-timedelta(minutes=10)
         loader = StormReportLoader("/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/storm_reports/STORM_EVENTS_2017-2021.csv", "NOAA", current_datetime.strftime("%Y%m%d%H%M"), 20, 0)
 
@@ -776,12 +777,9 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
 
         plt.scatter(storm_reports_hail_lons, storm_reports_hail_lats, color='k', s=180, marker='o', edgecolors= "white", transform=ccrs.PlateCarree(), zorder=13, label="Severe Hail")
         plt.scatter(storm_reports_hail_sig_lons, storm_reports_hail_sig_lats, color='k', s=700, marker='*', edgecolors= "white", transform=ccrs.PlateCarree(), zorder=14, label="Sig Severe Hail")
-        # plt.legend(prop={'size': 25}, loc=4).set_zorder(99)
 
     plt.savefig(os.path.join(plot_output_dir, "truth_plot_" + "{:04d}".format(plot_num) + '.png'), bbox_inches='tight')
 
-
-###############################################################################################################
 
 def load_line_data(path_str):
     if path_str[-1] == "*":
@@ -1047,7 +1045,7 @@ def plot_line_graphs(args):
     #           # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/ensemble_processed/labels/*",
     #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/ensemble_processed/labels/*"]
     # line_markers = ['', '', '', '', '', '']
-    # line_linestyles = ['-', '--', '-', '--', '--', '-']
+    # line_linestyles = ['-', (0, (5, 10)), '-', (0, (5, 10)), (0, (5, 10)), '-']
     # colors = ['k', 'y', 'y', 'b', 'r', 'r']
     # line_titles = ["Ens. Hailcast Baseline", "Det. UH Logistic Regression", "Ens. UH Logistic Regression", "Unet with Lightning", "Det. Unet w/o Lightning",
     #                "Ens. Unet w/o Lightning"]

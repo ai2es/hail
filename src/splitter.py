@@ -7,15 +7,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 import argparse
 
 
-# SECOND_DS_SIZE = 0.2
-# EXAMPLES_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/examples/*"
-# LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainvaltest/labels/*"
-# FIRST_DS_OUTPUT = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/trainval"
-# SECOND_DS_OUTPUT = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-1_hour-1_inch-train_val_test-cross_val/patches/test/unprocessed"
-# NUM_OUTPUT_FILES = (60,20)
-# N_FOLDS = 5
-# FOLD_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/patches/cv_folds"
-MESH_NAME = "MESH_class_bin_severe_0" # was MESH_class_bin and MESH_class_bin_0
+MESH_NAME = "MESH_class_bin_severe_0"
 
 
 def cluster_by_storm_event(labels):
@@ -60,7 +52,6 @@ def get_group_positions(labels, storm_groups, second_ds_size_or_n_folds, is_cros
     if is_cross_val:
         return all_storm_groups
     else:
-        # 0 index for one "fold"
         first_ds_indices = all_storm_groups[0][0]
         second_ds_indices = all_storm_groups[0][1]
 
@@ -248,6 +239,5 @@ if __name__ == "__main__":
     np.random.seed(args["random_seed"])
 
     stratified_kfold_cross_val(args["examples_glob"], args["labels_glob"], args["fold_path"], args["num_output_files"], args["n_folds"])
-    # split_dataset_no_stratification(args["examples_glob"], args["labels_glob"], args["first_ds_output"], args["second_ds_output"], args["num_output_files_tup"], args["second_ds_size"])
 
 

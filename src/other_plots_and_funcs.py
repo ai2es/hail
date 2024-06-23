@@ -3,18 +3,13 @@ import glob
 import xarray as xr
 import numpy as np
 
-###################
 ALL_LABELS_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch/patches/train/labels/*"
 OUTPUT_PATH = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-cross_val/images/test_dataset_plots/hist_comp_dz_test.png"
 DATA_HAD_NE_DIM = False
-###################
 TRAIN_LABELS_PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-more_fields-1_inch-balanced/patches/train/labels/*"
-###################
 PATH_GLOB = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/single_model/predictions_ensemble/*"
-VAR_NAME = "comp_dz" # was "srh_0to3"
-###################
+VAR_NAME = "comp_dz"
 OUTFILE = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/single_model/single_preds/y_hats_ens.nc"
-######################
 
 
 def make_hist_plots_labels():
@@ -51,9 +46,8 @@ def make_hist_plots_examples():
 
     fig = plt.figure(figsize=(16, 12), dpi=300)
     fig.patch.set_facecolor('white')
-    # Did have np.arange(-2000,5000,100) for srh
     plt.hist(data, [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90], log=True, edgecolor = "black")
-    plt.ylim((0,10**10)) # Was 10**9 for srh
+    plt.ylim((0,10**10))
     plt.tight_layout()
     plt.savefig(OUTPUT_PATH, bbox_inches='tight')
 

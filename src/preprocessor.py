@@ -61,8 +61,7 @@ def create_parser():
     parser.add_argument('--examples', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/examples/*')
     parser.add_argument('--labels', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/labels*')
     parser.add_argument('--output_ds_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-1_hour-128_size-more_fields-1_inch/patches/train/tf_datasets')
-    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/mins_maxs_gridrad_refl') # was mins_maxs_gridrad_refl
-                                                                                # REMOVE 'strikes' BELOW FOR LIGHTNING CASE
+    parser.add_argument('--min_max_dir', type=str, default='/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/mins_maxs_gridrad_refl')
     parser.add_argument('--feature_vars_to_drop', type=str, nargs='+', default=['lon', 'lat', "ZH", "ZH_class_bin", "comp_dz_class_bin",
                                                                                 'time', "time_0", "time_1", "time_2",
                                                                                 "time_3", "time_4", "time_5", "time_6", 
@@ -75,18 +74,16 @@ def create_parser():
                                                                                 "ZH_class_bin_7", "ZH_class_bin_8", "ZH_class_bin_9",
                                                                                 "ZH_class_bin_10", "ZH_class_bin_11", "ZH_class_bin_12"])
     
-                                                                               # BELOW USED TO HAVE MESH_class_bin_severe and MESH_class_bin_severe_0
     parser.add_argument('--label_vars_to_drop', type=str, nargs='+', default=['time', 'lon', 'lat', 'MESH_class_bin',
                                                                               'MESH95', 'MESH95_0', "time_0", "time_1", 
                                                                               "time_2", "time_3", "time_4", "time_5", 
                                                                               "time_6", "time_7", "time_8", "time_9", 
                                                                               "time_10", "time_11", "time_12", "MESH_class_bin_0"])
     parser.add_argument('--input_vars_that_must_repeat', type=str, nargs='+', default=['strikes', 'strikes_0', 'strikes_1', 'strikes_2', 'strikes_3'])
-    parser.add_argument('--label_class_name_str', type=str, default='MESH_class_bin_severe') # Was MESH_class_bin_0
-    parser.add_argument('--approx_file_clumping_num', type=int, default=None) # Was 3
-    parser.add_argument('--n_parallel_runs', type=int, default=None) # Was 15
+    parser.add_argument('--label_class_name_str', type=str, default='MESH_class_bin_severe')
+    parser.add_argument('--approx_file_clumping_num', type=int, default=None)
+    parser.add_argument('--n_parallel_runs', type=int, default=None)
     parser.add_argument('--run_num', type=int, default=0)
-    # parser.add_argument('--ne_dim_num', type=int, default=1)
     parser.add_argument('--selected_time', type=int, default=None)
     parser.add_argument('--ne_dim_size', type=int, default=18)
     parser.add_argument('--hailcast_threshold', type=float, default=1)
@@ -99,7 +96,6 @@ def create_parser():
     parser.add_argument('--data_is_3D', '-t', action='store_true')
     parser.add_argument('--unpack_ne', '-u', action='store_true')
     parser.add_argument('--apply_gaus', '-g', action='store_true')
-    # parser.add_argument('--unpack_3D', '-u', action='store_true')
 
     return parser
 
@@ -122,7 +118,7 @@ def make_hailcast_probabilistic(hailcast, threshold, ne_dim_num, ne_dim_size):
 
     hailcast_prob = np.sum(hailcast_class, axis=ne_dim_num)/ne_dim_size
     hailcast_prob = np.expand_dims(hailcast_prob, axis=ne_dim_num)
-    hailcast_prob = np.repeat(hailcast_prob, ne_dim_size, axis=ne_dim_num) # TODO: Investigate if this breaks order
+    hailcast_prob = np.repeat(hailcast_prob, ne_dim_size, axis=ne_dim_num)
 
     return hailcast_prob
 
@@ -138,7 +134,7 @@ def unpack_ne_dim_input(variable, ne_dim_num):
 def unpack_ne_dim_output(variable, ne_dim_size, ne_dim_num):
     variable_shape_adjusted = list(variable.shape)
     variable = np.expand_dims(variable, axis=ne_dim_num)
-    variable_repeated = np.repeat(variable, ne_dim_size, axis=ne_dim_num) # TODO: Investigate if this breaks order
+    variable_repeated = np.repeat(variable, ne_dim_size, axis=ne_dim_num)
     variable_shape_adjusted[0] = variable_shape_adjusted[0] * ne_dim_size
 
     return np.reshape(variable_repeated, tuple(variable_shape_adjusted)) # Only ok because we are making sure that the "ne" dim is next to the "n_samples" dim
@@ -160,7 +156,6 @@ if __name__ == "__main__":
     n_parallel_runs = args["n_parallel_runs"]
     run_num = args["run_num"]
     save_as_netcdf = args["save_as_netcdf"]
-    # ne_dim_num = args["ne_dim_num"]
     ne_dim_size = args["ne_dim_size"]
     hailcast_threshold = args["hailcast_threshold"]
     has_ne_dim = args["has_ne_dim"]
@@ -325,7 +320,7 @@ if __name__ == "__main__":
             output_ds.close()
             input_ds.close()
 
-            output_array = output_array.astype("float32") # TODO: Make this a setting later?
+            output_array = output_array.astype("float32")
             input_array = input_array.astype("float32")
 
             input_array = input_array.transpose(..., "variable")

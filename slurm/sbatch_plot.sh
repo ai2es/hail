@@ -4,7 +4,7 @@
 # Thread count:
 #SBATCH --cpus-per-task=4
 # memory in MB
-#SBATCH --mem=51200
+#SBATCH --mem=358400
 # The %04a is translated into a 4-digit number that encodes the SLURM_ARRAY_TASK_ID
 #SBATCH --output=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/slurm_output/out/plot_%04a_stdout.txt
 #SBATCH --error=/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/slurm_output/err/plot_%04a_stderr.txt

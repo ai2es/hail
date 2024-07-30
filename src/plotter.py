@@ -582,6 +582,12 @@ def domain_refl_plot(plot_output_dir, lons, lats, comp_dz, pred_val, init_dateti
     my_cmap = colors.ListedColormap(my_cmap, name="refl")
     ##################################
 
+    # Custom colormap for black hail contours
+    black_contour_cmap = np.column_stack([np.repeat(0.0,256),np.repeat(0.0,256),np.repeat(0.0,256),np.repeat(0.0,256)])
+    black_contour_cmap[:,-1] = np.linspace(0.2, 1, num=256)
+    black_contour_cmap = colors.ListedColormap(black_contour_cmap)
+    ##################################
+
     # Titles and labels
     current_datetime = init_datetime + timedelta(minutes=plot_num*5) # *5 for 5 minutes
     init_time_offset_str = "{:02d}".format(plot_num*5)
@@ -635,7 +641,7 @@ def domain_refl_plot(plot_output_dir, lons, lats, comp_dz, pred_val, init_dateti
     # Add actual plots
     plt.contourf(lons,lats,comp_dz,np.arange(5, 76, 1), vmin = 5, vmax = 75, cmap=my_cmap, transform=ccrs.PlateCarree(), zorder=10)
     pred_val[pred_val < 0.02] = np.nan
-    plt.contour(lons,lats,pred_val,np.arange(0,61,6)/100, colors='k', transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=0.6, zorder=11)
+    plt.contour(lons,lats,pred_val,np.arange(0,61,6)/100, cmap=black_contour_cmap, transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=0.6, zorder=11)
 
     if include_reports:
         current_datetime = current_datetime-timedelta(minutes=10)
@@ -651,6 +657,12 @@ def domain_refl_plot(plot_output_dir, lons, lats, comp_dz, pred_val, init_dateti
 
 
 def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast, init_datetime, include_reports, make_hailcast_probabilistic, plot_num = 0):
+    # Custom colormap for black hail contours
+    black_contour_cmap = np.column_stack([np.repeat(0.0,256),np.repeat(0.0,256),np.repeat(0.0,256),np.repeat(0.0,256)])
+    black_contour_cmap[:,-1] = np.linspace(0.2, 1, num=256)
+    black_contour_cmap = colors.ListedColormap(black_contour_cmap)
+    ##################################
+    
     # Titles and labels
     current_datetime = init_datetime + timedelta(minutes=plot_num*5) # *5 for 5 minutes
     init_time_offset_str = "{:02d}".format(plot_num*5)
@@ -766,7 +778,8 @@ def domain_truth_plot(plot_output_dir, lons, lats, true_val, pred_val, hailcast,
         plt.contourf(lons,lats,hailcast, [0, 1], colors='blue', transform=ccrs.PlateCarree(), zorder=11, alpha=1.0)
         plt.contourf(lons,lats,hailcast_and_true, [0, 1], colors='orange', transform=ccrs.PlateCarree(), zorder=12, alpha=1.0)
     pred_val[pred_val < 0.02] = np.nan
-    plt.contour(lons,lats,pred_val,np.arange(0,61,6)/100, colors='k', transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=0.6, zorder=13)
+    plt.contour(lons,lats,pred_val,np.arange(0,61,6)/100, cmap=black_contour_cmap, transform=ccrs.PlateCarree(), linewidths=2.3, vmin=0, vmax=0.6, zorder=13)
+    # plt.colorbar(fraction=0.043, pad=0.02, ticks = np.arange(0,61,6)/100).set_label(label="ML Predicted Probability of Hail > 1 Inch",size=30) #Changed padding here since other colorbars removed
 
     if include_reports:
         current_datetime = current_datetime-timedelta(minutes=10)
@@ -889,33 +902,33 @@ def plot_line_graphs(args):
 
     ######### ROC and Re curves #########
 
-    # model_outputs = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
-    #                  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
-    #                  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
-    #                  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
-    #                  "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc"]
-    # labels = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
-    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
-    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
-    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
-    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*"]
-    # line_linestyles = ['-', '-', '-', '-', '-']
-    # line_markers = ['', '', '', '', '']
-    # colors = ['b', 'g', 'r', 'c', 'y']
-    # line_titles = ["ML Start + 00 mins", "ML Start + 10 mins", "ML Start + 20 mins", "ML Start + 30 mins", "ML Start + 40 mins"]
-    # var_names = [("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"),
-    #               ("MESH_class_bin", "MESH_class_bin")]
-    # main_title = 'Pixelwise Reliability Diagram'
-    # output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/Reliability_Diagram.png"
-    # xlabel = 'Predicted Probability'
-    # ylabel = 'Observed Frequency'
-    # # main_title = 'Pixelwise Receiver Operating Characteristic Curve'
-    # # output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/ROC.png"
-    # # xlabel = 'False Positive Rate'
-    # # ylabel = 'True Positive Rate'
-    # show_legend = True
-    # plot_mode = "re"
-    # include_obs_cuttoff = False
+    model_outputs = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
+                     "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
+                     "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
+                     "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
+                     "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc"]
+    labels = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
+              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
+              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
+              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
+              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*"]
+    line_linestyles = ['-', '-', '-', '-', '-']
+    line_markers = ['', '', '', '', '']
+    colors = ['b', 'g', 'r', 'c', 'y']
+    line_titles = ["ML Start + 00 mins", "ML Start + 10 mins", "ML Start + 20 mins", "ML Start + 30 mins", "ML Start + 40 mins"]
+    var_names = [("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"),
+                  ("MESH_class_bin", "MESH_class_bin")]
+    main_title = 'Pixelwise Reliability Diagram'
+    output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/Reliability_Diagram.png"
+    xlabel = 'Predicted Probability'
+    ylabel = 'Observed Frequency'
+    # main_title = 'Pixelwise Receiver Operating Characteristic Curve'
+    # output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/ROC.png"
+    # xlabel = 'False Positive Rate'
+    # ylabel = 'True Positive Rate'
+    show_legend = True
+    plot_mode = "re"
+    include_obs_cuttoff = False
 
     ######### Gaus #########
 
@@ -952,48 +965,48 @@ def plot_line_graphs(args):
 
     ######### Lightning/main CSI plots #########
 
-    model_outputs = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/hailcast_refl/examples/*",
-                    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/predictions/y_hats.nc",
-                    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/predictions_ensemble/y_hats.nc",
-                    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
-                    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/predictions/y_hats.nc",
-                    # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions_ensemble/y_hats.nc",
-                    "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/predictions_ensemble/y_hats.nc"]
-    labels = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/hailcast_refl/labels/*",
-              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/processed/labels/*",
-              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/ensemble_processed/labels/*",
-              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
-              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/processed/labels/*",
-              # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/ensemble_processed/labels/*",
-              "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/ensemble_processed/labels/*"]
-    # line_linestyles = ['-', '-', '-', '-', '-', '-', '-']
-    # line_markers = ['s', 'o', '^', 'o', 'o', '^', '^']
-    # colors = ['k', 'k', 'k', 'b', 'r', 'b', 'r']
+    # model_outputs = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/hailcast_refl/examples/*",
+    #                 "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/predictions/y_hats.nc",
+    #                 "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/predictions_ensemble/y_hats.nc",
+    #                 "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions/y_hats.nc",
+    #                 "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/predictions/y_hats.nc",
+    #                 # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/predictions_ensemble/y_hats.nc",
+    #                 "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/predictions_ensemble/y_hats.nc"]
+    # labels = ["/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/hailcast_refl/labels/*",
+    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/processed/labels/*",
+    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/logreg/ensemble_processed/labels/*",
+    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/processed/labels/*",
+    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/processed/labels/*",
+    #           # "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/all_gaus_runs/ensemble_processed/labels/*",
+    #           "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/patches/test/no_lightning/ensemble_processed/labels/*"]
+    # # line_linestyles = ['-', '-', '-', '-', '-', '-', '-']
+    # # line_markers = ['s', 'o', '^', 'o', 'o', '^', '^']
+    # # colors = ['k', 'k', 'k', 'b', 'r', 'b', 'r']
+    # # line_linestyles = ['-', '-', '-', '-', '-', '-']
+    # line_markers = ['s', 'o', '^', 'o', 'o', '^']
+    # # colors = ['k', 'k', 'k', 'b', 'r', 'r']
     # line_linestyles = ['-', '-', '-', '-', '-', '-']
-    line_markers = ['s', 'o', '^', 'o', 'o', '^']
+    # # line_markers = ['o', 'o', 'o', 'o', 'o', 'o']
     # colors = ['k', 'k', 'k', 'b', 'r', 'r']
-    line_linestyles = ['-', '-', '-', '-', '-', '-']
-    # line_markers = ['o', 'o', 'o', 'o', 'o', 'o']
-    colors = ['k', 'k', 'k', 'b', 'r', 'r']
-    # line_titles = ["Ens. Hailcast Baseline", "Det. UH Logistic Regression", "Ens. UH Logistic Regression", "Det. Unet with Lightning", "Det. Unet w/o Lightning",
-    #                "Ens. Unet with Lightning", "Ens. Unet w/o Lightning"]
+    # # line_titles = ["Ens. Hailcast Baseline", "Det. UH Logistic Regression", "Ens. UH Logistic Regression", "Det. Unet with Lightning", "Det. Unet w/o Lightning",
+    # #                "Ens. Unet with Lightning", "Ens. Unet w/o Lightning"]
+    # # var_names = [("hailcast", "MESH_class_bin_severe"), ("MESH_class_bin_severe", "MESH_class_bin_severe"), ("MESH_class_bin_severe", "MESH_class_bin_severe"), ("MESH_class_bin", "MESH_class_bin"),
+    # #               ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin")]
+    # line_titles = ["Ens. Hailcast Baseline", "Det. UH Logistic Regression", "Ens. UH Logistic Regression", "Unet with Lightning", "Det. Unet w/o Lightning",
+    #                "Ens. Unet w/o Lightning"]
     # var_names = [("hailcast", "MESH_class_bin_severe"), ("MESH_class_bin_severe", "MESH_class_bin_severe"), ("MESH_class_bin_severe", "MESH_class_bin_severe"), ("MESH_class_bin", "MESH_class_bin"),
-    #               ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin")]
-    line_titles = ["Ens. Hailcast Baseline", "Det. UH Logistic Regression", "Ens. UH Logistic Regression", "Unet with Lightning", "Det. Unet w/o Lightning",
-                   "Ens. Unet w/o Lightning"]
-    var_names = [("hailcast", "MESH_class_bin_severe"), ("MESH_class_bin_severe", "MESH_class_bin_severe"), ("MESH_class_bin_severe", "MESH_class_bin_severe"), ("MESH_class_bin", "MESH_class_bin"),
-                  ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin")]
-    main_title = 'Neighborhood Max CSI'
-    # main_title = 'Pixelwise Max CSI'
-    # output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/c_new_main_plot.png"
-    output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/cn_new_main_plot.png"
-    limit_axis = True
-    xlabel = 'Time Since ML Forecast Start (mins)'
-    # ylabel = 'Pixelwise Max CSI'
-    ylabel = '6 km Radius Neighborhood Max CSI'
-    show_legend = True
-    plot_mode = "cn"
-    include_obs_cuttoff = False
+    #               ("MESH_class_bin", "MESH_class_bin"), ("MESH_class_bin", "MESH_class_bin")]
+    # main_title = 'Neighborhood Max CSI'
+    # # main_title = 'Pixelwise Max CSI'
+    # # output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/c_new_main_plot.png"
+    # output_path = "/ourdisk/hpc/ai2es/severe_nowcasting/hail_nowcasting/3d_unets-2d_unets-FINAL/images/test_dataset_plots/cn_new_main_plot.png"
+    # limit_axis = True
+    # xlabel = 'Time Since ML Forecast Start (mins)'
+    # # ylabel = 'Pixelwise Max CSI'
+    # ylabel = '6 km Radius Neighborhood Max CSI'
+    # show_legend = True
+    # plot_mode = "cn"
+    # include_obs_cuttoff = False
 
     ######### Small hail #########
 
@@ -1155,7 +1168,7 @@ def plot_line_graphs(args):
 
             prob_true, prob_pred = calibration_curve(single_label_data, single_pred_data, n_bins=100)
 
-            plot_data = (prob_pred, prob_true)
+            plot_data = (prob_pred, prob_true, single_pred_data)
         
         elif plot_mode == "roc":
             single_pred_data = current_pred_data[...,lead_time_indices[j]]
@@ -1211,7 +1224,22 @@ def plot_line_graphs(args):
     if include_obs_cuttoff:
         plt.axvline(x = 0, linewidth=2, color = 'g', label = 'Observations Threshold')
     if plot_mode == "re":
-        plt.plot([0,1], linestyle='--', c='k')
+        plt.plot([0,1], c='k')
+
+        all_pred_values = np.array([np.mean(plot_data[2]) for plot_data in all_plot_data])
+        # y_mean = np.mean(all_pred_values, axis=1)
+        y_mean = np.mean(all_pred_values)
+        # Plot the "No resolution" line
+        plt.axhline(y_mean, color='k')
+        # Plot the climatology line
+        plt.axvline(y_mean, color='k')
+        # Plot the negative/positive BSS  "no skill" score line
+        x = np.linspace(0,1,100)
+        slope = (x + y_mean) / 2
+        plt.plot(x, slope, linestyle='--', color='k')
+        # plt.fill_betweenx(y_mean, [0,1])
+        plt.xlim([-0.05,1])
+        plt.ylim([-0.05,1])
     if plot_mode == "roc":
         plt.plot([0,1], [0,1], linestyle='--', c='k', label='No Skill: AUC=%.3f' % (0.5))
     if plot_mode == "c" or plot_mode == "cn":
